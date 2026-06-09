@@ -1,1 +1,1 @@
-# intern-projects
+# intern-agents
