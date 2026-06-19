@@ -1,0 +1,15 @@
+{
+  "image_generation": {
+    "provider": "fal",
+    "model": "flux-dev",
+    "cost_per_image": 0.002,
+    "resolution": "1024x1024"
+  },
+  "platforms": [
+    "meta",
+    "tiktok",
+    "linkedin"
+  ],
+  "output_format": ["markdown", "json"],
+  "output_dir": "output/pioneer_plumbers_v1"
+}
