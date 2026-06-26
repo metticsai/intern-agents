@@ -1,0 +1,25 @@
+{
+  "client": "Blend Coffee Bar",
+  "location": "Brambleton, VA",
+  "generated_by": "Community Trust Creative Agent",
+  "platforms": {
+    "meta": {
+      "hook": "Brambleton has a hundred new houses and not one place yet that feels like home — until Blend.",
+      "body": "A licensed counselor and a Düsseldorf transplant built Blend to be the \"third place\" this fast-growing corner of Loudoun County was missing. Locally-roasted coffee, wine and beer after 5, and a signature egg sandwich worth the drive — plus a patio full of neighbors who already know your name.",
+      "cta": "Stop In Today",
+      "image_prompt": "A sunlit outdoor patio at Blend Coffee Bar in Broadlands, neighbors laughing over lattes at rustic wooden tables with the industrial-rustic interior glowing behind them. A barista hands a customer a to-go cup with the Blend logo in warm late-morning light."
+    },
+    "tiktok": {
+      "hook": "POV: you moved to Brambleton, didn't know a single neighbor, and then you found this place.",
+      "script": "Okay so this is NOT a chain — two women started Blend because one of them is literally a licensed counselor who wanted Loudoun County to have a real \"third place\" to gather. They've got wine and beer after 5, an egg sandwich one of the co-owner's husbands invented, and a patio that turns into trivia night, open mic, or a full-on German Christmas Market depending on the week. I've made more friends here than anywhere else in this town.",
+      "cta": "Comment \"BLEND\" and we'll tell you what's happening this week",
+      "image_prompt": "Fast-cut handheld footage panning across Blend's packed outdoor patio at golden hour — string lights flickering on, a barista steaming milk in slow motion, then a quick cut to a crowded trivia night inside, everyone laughing."
+    },
+    "linkedin": {
+      "hook": "Two Loudoun County founders noticed the same gap: new master-planned neighborhoods with plenty of houses and nowhere to actually gather.",
+      "body": "Blend Coffee Bar was founded by Tracey, a licensed counselor, and Mimi, who grew up immersed in café culture in Düsseldorf, Germany — both saw Brambleton and Broadlands' rapid growth outpacing its sense of community. Since opening, Blend has hosted recurring open mic nights, trivia, business meetups, and an annual German Christmas Market on its outdoor patio, earning Ashburn Magazine's \"Best Coffee Shop\" four years running. For local professionals and teams looking for a meeting space with character instead of another chain coffee shop, Blend offers locally-roasted coffee, wine and beer, and a patio built for real conversation.",
+      "cta": "Let's Connect",
+      "image_prompt": "A clean, well-lit photo of two professionals reviewing a laptop together at a wooden table on Blend's outdoor patio, coffee cups between them, the warm industrial-rustic interior and Blend signage visible in the soft-focus background."
+    }
+  }
+}

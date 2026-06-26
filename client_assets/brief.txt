@@ -1,7 +1,7 @@
-Client: Pioneer Plumbers
-Location: Brambleton, VA
-Services: Drain cleaning & hydro jetting, water heater repair/installation/descaling, leak detection (including slab leaks), fixture installation, water filtration & softening, bathroom/kitchen/basement remodeling plumbing
-Tone: Trustworthy, neighborly, family-owned (explicitly "not a franchise, not a call center")
-Website: https://www.pioneerdmv.com/service-areas/loudoun-county/brambleton
-Target Audience: Homeowners in Brambleton and surrounding Loudoun County areas, especially newer-construction (2010-2025) homes with tankless water heaters and PEX plumbing
-Key selling point: Father-son team, 30+ years combined experience, "If it's not right, we make it right" workmanship guarantee, licensed/bonded/insured, deep expertise with Loudoun Water's extreme hardness (10-12 grain) and its effect on tankless heaters
+Client: Blend Coffee Bar
+Location: Brambleton, VA (storefront at 43170 Southern Walk Plaza #120, Ashburn, VA 20148, in the neighboring Broadlands community, serving the Brambleton/Loudoun County trade area)
+Services: Locally-roasted specialty coffee and handcrafted espresso drinks, wine and beer, signature egg sandwich, light fare and baked goods from local bakers, large outdoor patio for community gatherings
+Tone: Warm, communal, "third place" hospitality — counselor-founded, relationship-driven, not a corporate chain
+Website: https://blendcoffeebar.com/
+Target Audience: Loudoun County locals and Brambleton/Broadlands families seeking a neighborhood gathering spot — remote workers, parents with young kids, retirees, students, and regulars who attend recurring community events
+Key selling point: Co-founded by Tracey (licensed counselor) and Mimi (relocated from Dusseldorf, Germany), built specifically to be a welcoming community hub rather than a quick-stop chain; hosts open mic nights, trivia, bingo, live music, and an annual German Christmas Market; signature egg sandwich designed by co-owner J.D.; Happy Hour 5-7pm daily; multiple-time "Best Coffee Shop" winner (Ashburn Magazine 2020-2023, Loudoun Times-Mirror 2021)
