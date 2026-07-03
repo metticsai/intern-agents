@@ -1,8 +1,12 @@
 {
+  "ai_generation": {
+    "provider": "gemini",
+    "model": "gemini-2.0-flash"
+  },
   "image_generation": {
     "provider": "fal",
     "model": "flux-dev",
-    "cost_per_image": 0.002,
+    "cost_per_image": 0.025,
     "resolution": "1024x1024"
   },
   "platforms": [
@@ -10,6 +14,5 @@
     "tiktok",
     "linkedin"
   ],
-  "output_format": ["markdown", "json"],
-  "output_dir": "output/blend_coffee_bar_v1"
+  "output_format": ["markdown", "json"]
 }
