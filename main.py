@@ -56,6 +56,29 @@ def _find_subpages(base_url, soup):
                 found.append(full)
     return found[:4]
 
+def _detect_industry(scraped_data):
+    """Classify business type from scraped content. Returns (industry_key, image_style_hint)."""
+    all_text = " ".join(
+        scraped_data.get("paragraphs", []) +
+        scraped_data.get("h1", []) +
+        scraped_data.get("h2", [])
+    ).lower()
+
+    if any(k in all_text for k in ["plumb", "hvac", "heat", "cool", "electric", "roof", "landscap", "pest", "handyman", "drain", "sewer", "gutter"]):
+        return "home_services", "Technician actively working on-site, natural daylight, tool belt visible, real house setting. NOT posed stock."
+    if any(k in all_text for k in ["coffee", "cafe", "café", "restaurant", "food", "bar", "bakery", "pizza", "sushi", "taco", "brew", "bistro", "diner", "eatery"]):
+        return "food_beverage", "Hands cupping a steaming drink or holding signature item. Warm golden-hour window light. Overhead flat lay with natural props. Moody or bright to match brand."
+    if any(k in all_text for k in ["salon", "spa", "hair", "nail", "massage", "beauty", "barber", "skin", "facial", "wellness", "wax"]):
+        return "health_beauty", "Client mid-service or just-finished, soft natural window light, serene and relaxed, clean minimalist salon background."
+    if any(k in all_text for k in ["gym", "fitness", "yoga", "personal train", "crossfit", "sport", "workout", "pilates"]):
+        return "health_fitness", "Person mid-exercise with visible effort and determination, dramatic gym lighting or bright outdoor setting, dynamic motion."
+    if any(k in all_text for k in ["law", "attorney", "legal", "accounting", "finance", "consult", "insurance", "real estate", "mortgage", "advisor"]):
+        return "professional_services", "Two people in genuine conversation or reviewing results on a laptop, bright clean office, confident and credible."
+    if any(k in all_text for k in ["shop", "store", "retail", "boutique", "clothing", "jewel", "gift", "apparel"]):
+        return "retail", "Person using or wearing the product in a natural lifestyle context, clean daylight, aspirational but candid."
+    return "general_business", "Real people in the actual business setting, natural light, authentic candid moment — not staged or stock."
+
+
 def _extract_brand_signals(all_text):
     """Pull specific brand signals from combined page text using pattern matching."""
     import re
@@ -223,10 +246,17 @@ def generate_campaign(scraped_data, company_name, location, config, feedback="")
         if combined:
             subpages_text += f"\n[{page_name.upper()} PAGE]\n" + "\n".join(combined[:8]) + "\n"
 
+    industry, image_style = _detect_industry(scraped_data)
+    platforms_to_generate = config.get("platforms", ["meta"])
+    print(f"  Industry detected: {industry} | Platforms: {', '.join(platforms_to_generate)}")
+
     context = f"""
 Company: {company_name}
 Location: {location}
 Website: {scraped_data['url']}
+Platforms to generate: {', '.join(platforms_to_generate)}
+Business type: {industry}
+Image style guidance: {image_style}
 
 BRAND SIGNALS (use these as hard facts in the copy):
 {signals_text}
@@ -386,30 +416,62 @@ def human_review_gate(data):
     print("\n✅ All platforms selected — proceeding to image generation")
     return data
 
-def generate_images(data, output_dir, config):
+def generate_images(data, output_dir, config, industry="general_business"):
     provider = config["image_generation"]["provider"]
     model = config["image_generation"]["model"]
     print(f"\n🎨 Generating images with {provider} ({model})...")
     images_dir = f"{output_dir}/images"
     os.makedirs(images_dir, exist_ok=True)
-    platforms = ["meta", "tiktok", "linkedin"]
+    active_platforms = list(data["platforms"].keys())
 
     image_sizes = {
-        "meta": "portrait_4_3",   # 4:5 ratio for Instagram feed
-        "tiktok": "portrait_4_3", # vertical for TikTok
-        "linkedin": "landscape_4_3", # horizontal for LinkedIn
+        "meta": "portrait_4_3",      # 4:5 for Instagram feed
+        "tiktok": "portrait_16_9",   # 9:16 vertical for TikTok
+        "linkedin": "landscape_4_3", # 16:9 horizontal for LinkedIn
     }
 
-    for platform in platforms:
-        image_prompt = data["platforms"][platform]["image_prompt"]
+    # Check for reference image to use as style anchor (image-to-image)
+    ref_dir = f"client_assets/references/{industry}"
+    ref_images = []
+    if os.path.exists(ref_dir):
+        ref_images = [f for f in os.listdir(ref_dir) if f.lower().endswith((".jpg", ".jpeg", ".png"))]
+    use_reference = bool(ref_images)
+    if use_reference:
+        print(f"  📎 Using reference image for style: {ref_dir}/{ref_images[0]}")
+
+    for platform in active_platforms:
+        image_prompt = data["platforms"][platform].get("image_prompt", "")
         image_path = f"{images_dir}/{platform}.jpg"
 
         try:
             import fal_client
-            result = fal_client.run(
-                f"fal-ai/{model}",
-                arguments={"prompt": image_prompt, "image_size": image_sizes.get(platform, "square_hd"), "num_images": 1},
-            )
+
+            if use_reference:
+                # Image-to-image: reference guides composition + style, prompt customizes content
+                ref_path = f"{ref_dir}/{ref_images[0]}"
+                with open(ref_path, "rb") as rf:
+                    ref_url = fal_client.upload(rf.read(), content_type="image/jpeg")
+                result = fal_client.run(
+                    f"fal-ai/{model}",
+                    arguments={
+                        "prompt": image_prompt,
+                        "image_url": ref_url,
+                        "image_size": image_sizes.get(platform, "square_hd"),
+                        "strength": 0.75,
+                        "num_images": 1,
+                    },
+                )
+            else:
+                # Text-to-image with detailed prompt
+                result = fal_client.run(
+                    f"fal-ai/{model}",
+                    arguments={
+                        "prompt": image_prompt,
+                        "image_size": image_sizes.get(platform, "square_hd"),
+                        "num_images": 1,
+                    },
+                )
+
             image_url = result["images"][0]["url"]
             response = requests.get(image_url, timeout=60)
             response.raise_for_status()
@@ -532,6 +594,49 @@ def _save_html_preview(data, output_dir):
     with open(f"{output_dir}/preview.html", "w") as f:
         f.write(html)
 
+META_CTA_MAP = {
+    "Book Now": "BOOK_TRAVEL",
+    "Call Today": "CALL_NOW",
+    "Get a Free Quote": "GET_QUOTE",
+    "DM Us": "MESSAGE_PAGE",
+    "Learn More": "LEARN_MORE",
+    "Contact Us": "CONTACT_US",
+}
+
+def _save_meta_export(data, output_dir):
+    """Save meta_export.json formatted for Meta Ads Manager upload."""
+    meta = data["platforms"]["meta"]
+    primary_text = f"{meta.get('hook', '')}\n\n{meta.get('body', '')}"
+    cta_text = meta.get("cta", "Learn More")
+    export = {
+        "meta_ads_manager": {
+            "campaign_name": f"{data['client']} — Instagram Campaign",
+            "ad_format": "Single Image",
+            "placement": "Instagram Feed",
+            "aspect_ratio": "4:5",
+            "recommended_resolution": "1080x1350px",
+            "primary_text": primary_text,
+            "headline": meta.get("headline", ""),
+            "call_to_action_type": META_CTA_MAP.get(cta_text, "LEARN_MORE"),
+            "call_to_action_label": cta_text,
+            "hashtags": meta.get("hashtags", ""),
+            "image_prompt": meta.get("image_prompt", ""),
+            "image_path": meta.get("image_path", "— not generated yet —"),
+            "upload_instructions": [
+                "1. Go to Meta Ads Manager → Create Ad",
+                "2. Choose Instagram Feed placement",
+                "3. Upload image at 1080x1350px (4:5 ratio)",
+                "4. Paste primary_text into Primary Text field",
+                "5. Paste headline into Headline field",
+                "6. Set call_to_action_type from this file",
+                "7. Set budget and audience, then publish"
+            ]
+        }
+    }
+    with open(f"{output_dir}/meta_export.json", "w") as f:
+        json.dump(export, f, indent=2)
+
+
 def save_output(data, output_dir):
     print(f"\n💾 Saving output to {output_dir}...")
     os.makedirs(output_dir, exist_ok=True)
@@ -606,6 +711,11 @@ def save_output(data, output_dir):
     saved_files.append("campaign.json")
     _save_html_preview(data, output_dir)
     saved_files.append("preview.html")
+
+    if "meta" in data["platforms"]:
+        _save_meta_export(data, output_dir)
+        saved_files.append("meta_export.json")
+
     print(f"✅ Saved: {', '.join(saved_files)}")
 
 if __name__ == "__main__":
@@ -680,6 +790,10 @@ if __name__ == "__main__":
             print("❌ Output validation failed. Campaign not saved.")
             exit()
 
+        # Keep only configured platforms (AI may generate extras)
+        configured = config.get("platforms", ["meta"])
+        data["platforms"] = {k: v for k, v in data["platforms"].items() if k in configured}
+
         # Stage 5 — Human Review Gate
         result = human_review_gate(data)
         if result is None:
@@ -692,9 +806,10 @@ if __name__ == "__main__":
         break
 
     # Stage 6 — Image Generation
+    industry, _ = _detect_industry(scraped)
     if config["image_generation"].get("enabled", True):
         try:
-            data = generate_images(data, output_dir, config)
+            data = generate_images(data, output_dir, config, industry)
         except Exception as e:
             print(f"\n⚠️  Image generation failed: {e}")
             print("   Continuing — text output will still be saved.")
