@@ -1,0 +1,22 @@
+{
+  "industry": "home_services",
+  "description": "Plumbing, HVAC, electrical, roofing, landscaping, pest control",
+  "examples": [
+    {
+      "angle": "SOCIAL PROOF — specific numbers, local trust",
+      "headline": "Brambleton's #1 Plumber",
+      "hook": "196 five-star reviews. Same-day service. Licensed & insured since 2008. 🔧",
+      "body": "Pioneer Plumbers has fixed thousands of Loudoun County homes — drain clogs, water heaters, full repiping. We pick up the phone, we show up on time, and we get it right the first time. Your neighbors trust us. 🏠",
+      "cta": "Get Quote",
+      "hashtags": "#BrambletonVA #PioneerPlumbers #LocalPlumber #LoudounCounty #SameDayService"
+    },
+    {
+      "angle": "PAIN POINT / URGENCY — lead with the problem",
+      "headline": "Drain Clogged? Fixed Today.",
+      "hook": "It's 7pm. Your sink won't drain. We answer the phone. 📞",
+      "body": "Pioneer Plumbers serves Brambleton, Ashburn, and all of Loudoun County — nights and weekends included. Flat-rate pricing, no surprise fees, background-checked techs. We've been doing this since 2008. 💪",
+      "cta": "Call Now",
+      "hashtags": "#EmergencyPlumbing #BrambletonVA #PioneerPlumbers #24HourPlumber #LoudounLocal"
+    }
+  ]
+}

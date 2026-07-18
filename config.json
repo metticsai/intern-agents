@@ -1,10 +1,10 @@
 {
   "ai_generation": {
-    "provider": "gemini",
-    "model": "gemini-2.5-flash"
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6"
   },
   "image_generation": {
-    "enabled": false,
+    "enabled": true,
     "provider": "fal",
     "model": "flux/dev",
     "cost_per_image": 0.025,

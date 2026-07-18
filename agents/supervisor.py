@@ -88,12 +88,27 @@ def search_and_confirm_url(company_name: str, location: str) -> str:
 
 @tool
 def extract_brand_intelligence(company_name: str, location: str, url: str) -> str:
-    """Run the Brand Intelligence Agent to scrape the website and extract a structured Brand Brief.
+    """Scrape the website and run Brand Intelligence Agent to extract a structured Brand Brief.
 
+    Pre-scrapes in Python so Brand Intel Agent receives content directly — no tool call needed.
     This is HITL Gate 2 — Brand Identity Approval. Returns the approved Brand Brief as JSON string.
     """
+    print(f"\n🌐 Pre-scraping {url}...")
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        resp = requests.get(url, headers=headers, timeout=8)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        h1s = [t.get_text().strip() for t in soup.find_all("h1") if t.get_text().strip()]
+        h2s = [t.get_text().strip() for t in soup.find_all("h2") if t.get_text().strip()]
+        paragraphs = [t.get_text().strip() for t in soup.find_all("p") if len(t.get_text().strip()) > 30][:15]
+        scraped_content = f"URL: {url}\nH1: {h1s}\nH2: {h2s}\nCONTENT:\n" + "\n".join(paragraphs)
+        print(f"  ✅ Scraped {len(paragraphs)} paragraphs")
+    except Exception as e:
+        scraped_content = f"URL: {url}\n[Scrape failed: {e}]"
+        print(f"  ⚠️  Scrape failed: {e}")
+
     print(f"\n🧠 Brand Intelligence Agent running...")
-    brief = run_brand_intel_agent(company_name, location, url)
+    brief = run_brand_intel_agent(company_name, location, url, scraped_content)
     campaign_state["brand_brief"] = brief
 
     print("\n" + "=" * 62)
@@ -119,29 +134,30 @@ def generate_campaign_copy(company_name: str, location: str, brand_brief_json: s
     """Run the Creative Copy Generation Agent to produce 3 variants per platform.
 
     Inputs: company_name, location, brand_brief as JSON string, comma-separated platform list.
-    Returns campaign JSON string.
+    Returns status — full campaign stored in campaign_state.
     """
     print(f"\n✍️  Copy Generation Agent running...")
-    brief = json.loads(brand_brief_json)
+    brief = campaign_state.get("brand_brief", {})
+    if not brief:
+        brief = json.loads(brand_brief_json)
     platform_list = [p.strip() for p in platforms.split(",")]
     campaign = run_copy_gen_agent(brief, company_name, location, platform_list)
     campaign_state["campaign"] = campaign
     print(f"  ✅ Generated {len(platform_list)} platforms × 3 variants")
-    return json.dumps(campaign)
+    return json.dumps({"status": "copy_complete", "platforms": platform_list})
 
 
 @tool
 def validate_platform_specs(campaign_json: str) -> str:
-    """Run the Platform Spec Agent to validate character limits and add platform-specific hooks.
-
-    Returns validated campaign JSON string with spec_report on each variant.
-    """
+    """Run the Platform Spec Agent to validate character limits and add platform-specific hooks."""
     print(f"\n📋 Platform Spec Agent running...")
-    campaign = json.loads(campaign_json)
+    campaign = campaign_state.get("campaign", {})
+    if not campaign:
+        campaign = json.loads(campaign_json)
     validated = run_platform_spec_agent(campaign)
     campaign_state["campaign"] = validated
     print(f"  ✅ Platform specs validated")
-    return json.dumps(validated)
+    return json.dumps({"status": "spec_complete"})
 
 
 @tool
@@ -151,22 +167,17 @@ def run_compliance_check(campaign_json: str, brand_brief_json: str) -> str:
     Returns campaign JSON string with compliance_report on each variant (PASS/FLAG/REJECT).
     """
     print(f"\n🛡️  Compliance Agent running...")
-    campaign = json.loads(campaign_json)
-    brief = json.loads(brand_brief_json)
+    # Use campaign_state as source of truth — JSON string may be too large for clean tool pass
+    campaign = campaign_state.get("campaign", {})
+    if not campaign:
+        campaign = json.loads(campaign_json)
+    brief = campaign_state.get("brand_brief", {})
+    if not brief:
+        brief = json.loads(brand_brief_json)
+
     checked = run_compliance_agent(campaign, brief)
     campaign_state["campaign"] = checked
-
-    # Print a quick summary of compliance results
-    for platform_key, platform_data in checked.get("platforms", {}).items():
-        for vkey, vdata in platform_data.items():
-            if not vkey.startswith("variant_"):
-                continue
-            report = vdata.get("compliance_report", {})
-            status = report.get("status", "UNKNOWN")
-            icon = "✅" if status == "PASS" else ("⚠️ " if status == "FLAG" else "❌")
-            print(f"  {icon} {platform_key}/{vkey}: {status}")
-
-    return json.dumps(checked)
+    return json.dumps({"status": "compliance_complete"})
 
 
 @tool
@@ -176,7 +187,13 @@ def present_for_human_review(campaign_json: str) -> str:
     This is HITL Gate 3 — Creative Review Gate. User picks one variant per platform
     or rejects the entire campaign. Returns flattened approved campaign JSON string.
     """
-    campaign = json.loads(campaign_json)
+    # Use campaign_state — the JSON string arg may be too large to pass cleanly
+    campaign = campaign_state.get("campaign", {})
+    if not campaign:
+        try:
+            campaign = json.loads(campaign_json)
+        except Exception as e:
+            return json.dumps({"error": f"Could not load campaign: {e}"})
     selected: dict = {}
 
     for platform_key, spec in PLATFORM_SPECS.items():
@@ -240,33 +257,20 @@ def present_for_human_review(campaign_json: str) -> str:
 
 SUPERVISOR_PROMPT = """You are the Campaign Orchestration Supervisor for Mettics Consulting.
 
-You orchestrate a full ad campaign pipeline using specialist agents.
-Follow these steps IN ORDER — never skip or reorder them:
+Execute these 6 steps IN ORDER. Call each tool immediately — do not narrate, summarize, or explain between steps. Output only what the tools return.
 
 1. search_and_confirm_url(company_name, location)
-   → Finds the business website, user confirms (HITL Gate 1)
-
 2. extract_brand_intelligence(company_name, location, url)
-   → Brand Intel Agent scrapes site and extracts Brand Brief, user approves (HITL Gate 2)
-
 3. generate_campaign_copy(company_name, location, brand_brief_json, platforms)
-   → Copy Gen Agent produces 3 variants per platform from the brand brief
-
 4. validate_platform_specs(campaign_json)
-   → Platform Spec Agent checks character limits and adds platform hooks
-
 5. run_compliance_check(campaign_json, brand_brief_json)
-   → Compliance Agent checks brand safety — any REJECT means that variant is flagged for human
-
 6. present_for_human_review(campaign_json)
-   → User reviews all variants and picks one per platform (HITL Gate 3)
-
-After step 6, report what was approved and that files are ready to save.
 
 RULES:
-- Never skip the compliance check or human review gate
-- Never auto-publish any creative without human approval
-- If any step returns an error, report clearly what failed and stop"""
+- Call each tool immediately after the previous one returns. No preamble.
+- Never skip compliance check or human review
+- Never auto-publish without human approval
+- If a step errors, report what failed and stop"""
 
 
 def create_supervisor() -> Agent:

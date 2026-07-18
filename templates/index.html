@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mettics Creative Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <div class="logo">
+      <span class="logo-mark">M</span>
+      <span class="logo-text">Mettics <span class="logo-sub">Creative Agent</span></span>
+    </div>
+    <div class="header-badge">Beta</div>
+  </div>
+</header>
+
+<main class="main">
+
+  <!-- VIEW: HOME -->
+  <div id="view-home" class="view active">
+    <div class="hero">
+      <p class="hero-eyebrow">AI-Powered Ad Generation</p>
+      <h1 class="hero-title">Instagram ads that<br>sound like your brand.</h1>
+      <p class="hero-sub">Enter a company name and location. The agent finds the website, reads the brand, and generates 3 campaign-ready ad variants in under 60 seconds.</p>
+    </div>
+
+    <div class="card input-card">
+      <div class="input-group">
+        <div class="field">
+          <label class="label">Company Name</label>
+          <input id="company-name" class="input" type="text" placeholder="e.g. Pioneer Plumbers" autocomplete="off">
+        </div>
+        <div class="field">
+          <label class="label">Location</label>
+          <input id="location" class="input" type="text" placeholder="e.g. Brambleton VA" autocomplete="off">
+        </div>
+      </div>
+      <button id="btn-search" class="btn btn-primary btn-full" onclick="startSearch()">
+        Generate Campaign
+        <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+      </button>
+    </div>
+
+    <div class="steps-preview">
+      <div class="step-item"><div class="step-dot"></div><span>Find website</span></div>
+      <div class="step-line"></div>
+      <div class="step-item"><div class="step-dot"></div><span>Read brand</span></div>
+      <div class="step-line"></div>
+      <div class="step-item"><div class="step-dot"></div><span>Generate variants</span></div>
+      <div class="step-line"></div>
+      <div class="step-item"><div class="step-dot"></div><span>Review &amp; export</span></div>
+    </div>
+  </div>
+
+  <!-- VIEW: URL SELECTION -->
+  <div id="view-urls" class="view">
+    <div class="view-header">
+      <h2 class="view-title">Select the right website</h2>
+      <p class="view-sub">We found these results for <span id="company-label" class="highlight"></span>. Pick the official website.</p>
+    </div>
+    <div id="url-list" class="url-list"></div>
+  </div>
+
+  <!-- VIEW: LOADING -->
+  <div id="view-loading" class="view">
+    <div class="loading-center">
+      <div class="spinner-ring"></div>
+      <h2 id="loading-title" class="loading-title">Searching...</h2>
+      <p id="loading-sub" class="loading-sub">This takes about 20–30 seconds</p>
+      <div class="progress-stages">
+        <div class="stage" id="stage-search">
+          <div class="stage-icon">🔍</div>
+          <div class="stage-info">
+            <div class="stage-name">Find Website</div>
+            <div class="stage-status">Searching DuckDuckGo</div>
+          </div>
+          <div class="stage-badge pending">—</div>
+        </div>
+        <div class="stage" id="stage-scrape">
+          <div class="stage-icon">🌐</div>
+          <div class="stage-info">
+            <div class="stage-name">Read Brand</div>
+            <div class="stage-status">Scraping site + subpages</div>
+          </div>
+          <div class="stage-badge pending">—</div>
+        </div>
+        <div class="stage" id="stage-generate">
+          <div class="stage-icon">✍️</div>
+          <div class="stage-info">
+            <div class="stage-name">Generate Copy</div>
+            <div class="stage-status">Claude Sonnet writing 3 variants</div>
+          </div>
+          <div class="stage-badge pending">—</div>
+        </div>
+        <div class="stage" id="stage-validate">
+          <div class="stage-icon">✅</div>
+          <div class="stage-info">
+            <div class="stage-name">Validate &amp; Check</div>
+            <div class="stage-status">Spec + compliance check</div>
+          </div>
+          <div class="stage-badge pending">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VIEW: REVIEW -->
+  <div id="view-review" class="view">
+    <div class="view-header">
+      <h2 class="view-title">Pick your ad</h2>
+      <p class="view-sub">Three variants for <span id="review-company" class="highlight"></span>. Each uses a different angle — social proof, urgency, or story.</p>
+    </div>
+
+    <div class="review-meta">
+      <div class="meta-pill" id="review-industry"></div>
+      <div class="meta-pill" id="review-signals"></div>
+    </div>
+
+    <div id="variants-grid" class="variants-grid"></div>
+
+    <div class="review-actions">
+      <button class="btn btn-ghost" onclick="regenerate()">
+        <svg viewBox="0 0 20 20" fill="currentColor" class="btn-icon-sm"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
+        Regenerate all
+      </button>
+      <button id="btn-save" class="btn btn-primary" onclick="saveSelected()" disabled>
+        Save &amp; Export
+        <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- VIEW: FEEDBACK -->
+  <div id="view-feedback" class="view">
+    <div class="feedback-center">
+      <h2 class="view-title">What should be different?</h2>
+      <p class="view-sub">Give direction and the agent will regenerate all three variants.</p>
+      <textarea id="feedback-input" class="textarea" placeholder="e.g. More urgent tone, mention the 5-star reviews, less corporate language..."></textarea>
+      <div class="feedback-actions">
+        <button class="btn btn-ghost" onclick="showView('view-review')">Cancel</button>
+        <button class="btn btn-primary" onclick="regenerateWithFeedback()">Regenerate with feedback</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- VIEW: COMPLETE -->
+  <div id="view-complete" class="view">
+    <div class="complete-center">
+      <div class="success-icon">✓</div>
+      <h2 class="view-title">Campaign saved</h2>
+      <p class="view-sub">Your ad is ready to upload to Meta Ads Manager.</p>
+
+      <div id="generated-image-wrap" style="display:none; margin-bottom: 20px;">
+        <img id="generated-image" src="" alt="Generated ad image" style="width:100%; max-width:320px; border-radius:12px; border:1px solid var(--border); box-shadow:var(--shadow-md);">
+      </div>
+
+      <div id="output-info" class="output-info"></div>
+
+      <div id="download-links" class="download-grid"></div>
+
+      <button class="btn btn-ghost btn-full" onclick="startOver()" style="margin-top: 24px;">
+        Start new campaign
+      </button>
+    </div>
+  </div>
+
+</main>
+
+<!-- FEEDBACK TOAST -->
+<div id="toast" class="toast"></div>
+
+<script src="/static/js/app.js?v=2"></script>
+</body>
+</html>

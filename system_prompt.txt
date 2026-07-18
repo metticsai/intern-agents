@@ -18,14 +18,14 @@ Generate exactly 3 variants for each platform. Each variant MUST use a different
 - headline: Bold text shown BELOW the image. Under 40 chars. Action-oriented. (e.g. "Brambleton's #1 Plumber")
 - hook: Primary text shown ABOVE the image. Under 125 chars. This is the first thing they read — make it stop the scroll.
 - body: 2-3 sentences that build on the hook. Specific, emotional, local. Use 2-4 emojis naturally.
-- cta: One of: Book Now / Call Today / Get a Free Quote / DM Us / Learn More
+- cta: MUST be exactly one of these Meta button options (nothing else): Book Now / Call Now / Get Quote / Learn More / Contact Us / Sign Up / Shop Now / Send Message
 - hashtags: 6-8 tags mixing local (#BrambletonVA), niche (#LocalPlumber), and broad (#HomeRepair). String format.
 - image_prompt: Vertical 4:5 portrait for Instagram feed. [See IMAGE PROMPT RULES below]
 
 ## TikTok — fields per variant:
 - overlay: Bold text shown ON the image. Under 34 chars. Punchy, casual, Gen-Z tone. (e.g. "POV: Your drain is fixed in 1 hour")
 - caption: Short caption below the post. Under 150 chars. Written like a real person talking, not a brand. No corporate language.
-- cta: Conversational (Comment below / Link in bio / Drop a 🔥 if you need this)
+- cta: Short and conversational — max 30 chars (e.g. "Link in bio 👇" / "Comment below" / "Follow for more")
 - hashtags: 6-8 tags including trending formats (#POV, #SmallBusiness, #LocalFinds) plus niche and location. String format.
 - image_prompt: Vertical 9:16 portrait. [See IMAGE PROMPT RULES below] UGC-style, raw, authentic.
 

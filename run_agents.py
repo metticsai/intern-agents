@@ -59,6 +59,14 @@ def main():
     )
 
     # Save output if campaign was approved
+    campaign = campaign_state.get("campaign", {})
+    if not isinstance(campaign.get("platforms"), dict) or not campaign["platforms"]:
+        print("\n❌ Campaign data malformed — 'platforms' key missing or empty.")
+        print(f"   Keys found: {list(campaign.keys())}")
+        print("   The agents ran but the output structure couldn't be parsed correctly.")
+        print("   Try running again — this is usually a one-off JSON formatting issue.")
+        return
+
     if campaign_state.get("campaign") and not campaign_state.get("rejected"):
         output_dir = get_output_dir(company_name)
 

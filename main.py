@@ -250,6 +250,23 @@ def generate_campaign(scraped_data, company_name, location, config, feedback="")
     platforms_to_generate = config.get("platforms", ["meta"])
     print(f"  Industry detected: {industry} | Platforms: {', '.join(platforms_to_generate)}")
 
+    examples_text = ""
+    examples_path = f"client_assets/examples/{industry}.json"
+    if os.path.exists(examples_path):
+        try:
+            ex_data = json.load(open(examples_path))
+            examples = ex_data.get("examples", [])[:2]
+            if examples:
+                examples_text = "\n\nHIGH-PERFORMING AD EXAMPLES — study these and match the quality, specificity, and tone:\n"
+                for i, ex in enumerate(examples, 1):
+                    examples_text += f"\nExample {i} ({ex.get('angle', '')}):\n"
+                    examples_text += f"  headline: {ex['headline']}\n"
+                    examples_text += f"  hook: {ex['hook']}\n"
+                    examples_text += f"  body: {ex['body']}\n"
+                    examples_text += f"  cta: {ex['cta']}\n"
+        except Exception:
+            pass
+
     context = f"""
 Company: {company_name}
 Location: {location}
@@ -270,7 +287,7 @@ HOMEPAGE CONTENT:
 """
     system_prompt = open("system_prompt.txt").read()
     feedback_line = f"\n\nIMPORTANT FEEDBACK FROM REVIEWER — apply this to all 3 variants: {feedback}" if feedback else ""
-    full_prompt = f"{system_prompt}\n\nGenerate a complete campaign for {company_name} in {location}. Here is all the data scraped from their website:\n\n{context}{feedback_line}\n\nReturn ONLY a valid JSON object. No markdown, no explanation, just the JSON."
+    full_prompt = f"{system_prompt}\n\nGenerate a complete campaign for {company_name} in {location}. Here is all the data scraped from their website:\n\n{context}{examples_text}{feedback_line}\n\nReturn ONLY a valid JSON object. No markdown, no explanation, just the JSON."
 
     if provider == "gemini":
         from google import genai
@@ -289,7 +306,7 @@ HOMEPAGE CONTENT:
         client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         message = client.messages.create(
             model=model,
-            max_tokens=4000,
+            max_tokens=8192,
             messages=[{"role": "user", "content": full_prompt}]
         )
         print(f"✅ Claude generated campaign")
@@ -310,17 +327,14 @@ def validate_output(campaign_json):
         clean = campaign_json[start:end]
         data = json.loads(clean)
     except json.JSONDecodeError as e:
-        print(f"❌ Output is not valid JSON: {e}")
-        print(f"   Response length: {len(campaign_json)} chars")
-        print(f"   Last 300 chars of response:")
-        print(campaign_json[-300:])
-        return False, None
+        msg = f"Not valid JSON: {e} (response length: {len(campaign_json)} chars, last 200: ...{campaign_json[-200:]})"
+        print(f"❌ {msg}")
+        return False, None, msg
     required_platforms = list(data.get("platforms", {}).keys())
     if not required_platforms:
-        errors.append("No platforms found in output")
-        for error in errors:
-            print(f"❌ {error}")
-        return False, None
+        msg = "No platforms found in AI output"
+        print(f"❌ {msg}")
+        return False, None, msg
     required_fields = {
         "meta": ["headline", "hook", "body", "cta", "hashtags", "image_prompt"],
         "tiktok": ["overlay", "caption", "cta", "hashtags", "image_prompt"],
@@ -341,9 +355,9 @@ def validate_output(campaign_json):
     if errors:
         for error in errors:
             print(f"❌ {error}")
-        return False, None
+        return False, None, "; ".join(errors)
     print(f"✅ Campaign output validated — all fields present")
-    return True, data
+    return True, data, None
 
 def human_review_gate(data):
     ALL_PLATFORM_SPECS = {
@@ -785,9 +799,9 @@ if __name__ == "__main__":
             exit()
 
         # Stage 4 — Validate Output
-        is_valid_output, data = validate_output(campaign_json)
+        is_valid_output, data, val_error = validate_output(campaign_json)
         if not is_valid_output:
-            print("❌ Output validation failed. Campaign not saved.")
+            print(f"❌ Output validation failed: {val_error}")
             exit()
 
         # Keep only configured platforms (AI may generate extras)

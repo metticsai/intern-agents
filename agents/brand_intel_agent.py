@@ -7,11 +7,10 @@ from agents.tools import scrape_website
 
 SYSTEM_PROMPT = """You are a Brand Intelligence specialist for Mettics Consulting.
 
-Your job: scrape a business website and extract a structured Brand Brief — the foundation
+You receive pre-scraped website content. Extract a structured Brand Brief — the foundation
 every other agent in this pipeline depends on. Be specific. Use actual language from the site.
 
-Use the scrape_website tool to read the site content, then extract:
-
+Extract:
 1. brand_voice: tone adjectives (e.g. "friendly", "professional"), key vocabulary, formality level
 2. value_propositions: top 3-5 USPs — what makes this business genuinely different
 3. products_services: what they offer with specific names, not generic categories
@@ -22,17 +21,18 @@ Use the scrape_website tool to read the site content, then extract:
 Return ONLY a valid JSON object with these 6 keys. No markdown. No explanation."""
 
 
-def run_brand_intel_agent(company_name: str, location: str, url: str) -> dict:
-    """Run Brand Intelligence Agent. Returns a structured Brand Brief dict."""
+def run_brand_intel_agent(company_name: str, location: str, url: str, scraped_content: str = "") -> dict:
+    """Run Brand Intelligence Agent with pre-scraped content. Returns a structured Brand Brief dict."""
     agent = Agent(
         model=get_model("primary"),
-        tools=[scrape_website],
+        tools=[],
         system_prompt=SYSTEM_PROMPT,
     )
 
     result = agent(
-        f"Analyze {company_name} in {location}. Their website is: {url}\n"
-        "Scrape it and return a complete Brand Brief as a JSON object."
+        f"Company: {company_name}\nLocation: {location}\nWebsite: {url}\n\n"
+        f"Pre-scraped content:\n{scraped_content}\n\n"
+        "Return a complete Brand Brief as a JSON object."
     )
 
     text = str(result)

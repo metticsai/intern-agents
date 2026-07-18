@@ -29,28 +29,43 @@ Style rules:
 
 Return ONLY a valid JSON object. No markdown. No fences. No explanation."""
 
-CAMPAIGN_STRUCTURE = """{
-  "client": "COMPANY",
-  "location": "LOCATION",
-  "generated_by": "Community Trust Creative Agent",
-  "platforms": {
-    "meta": {
-      "variant_1": {"hook": "...", "body": "...", "cta": "...", "hashtags": "...", "image_prompt": "..."},
-      "variant_2": {"hook": "...", "body": "...", "cta": "...", "hashtags": "...", "image_prompt": "..."},
-      "variant_3": {"hook": "...", "body": "...", "cta": "...", "hashtags": "...", "image_prompt": "..."}
-    },
-    "tiktok": {
-      "variant_1": {"overlay": "...", "caption": "...", "cta": "...", "hashtags": "...", "image_prompt": "..."},
-      "variant_2": {"overlay": "...", "caption": "...", "cta": "...", "hashtags": "...", "image_prompt": "..."},
-      "variant_3": {"overlay": "...", "caption": "...", "cta": "...", "hashtags": "...", "image_prompt": "..."}
-    },
-    "linkedin": {
-      "variant_1": {"hook": "...", "body": "...", "cta": "...", "hashtags": "...", "image_prompt": "..."},
-      "variant_2": {"hook": "...", "body": "...", "cta": "...", "hashtags": "...", "image_prompt": "..."},
-      "variant_3": {"hook": "...", "body": "...", "cta": "...", "hashtags": "...", "image_prompt": "..."}
-    }
-  }
-}"""
+PLATFORM_TEMPLATES = {
+    "meta": (
+        '"meta": {\n'
+        '      "variant_1": {"hook": "...", "body": "...", "cta": "...", "hashtags": "...", "image_prompt": "..."},\n'
+        '      "variant_2": {"hook": "...", "body": "...", "cta": "...", "hashtags": "...", "image_prompt": "..."},\n'
+        '      "variant_3": {"hook": "...", "body": "...", "cta": "...", "hashtags": "...", "image_prompt": "..."}\n'
+        '    }'
+    ),
+    "tiktok": (
+        '"tiktok": {\n'
+        '      "variant_1": {"overlay": "...", "caption": "...", "cta": "...", "hashtags": "...", "image_prompt": "..."},\n'
+        '      "variant_2": {"overlay": "...", "caption": "...", "cta": "...", "hashtags": "...", "image_prompt": "..."},\n'
+        '      "variant_3": {"overlay": "...", "caption": "...", "cta": "...", "hashtags": "...", "image_prompt": "..."}\n'
+        '    }'
+    ),
+    "linkedin": (
+        '"linkedin": {\n'
+        '      "variant_1": {"hook": "...", "body": "...", "cta": "...", "hashtags": "...", "image_prompt": "..."},\n'
+        '      "variant_2": {"hook": "...", "body": "...", "cta": "...", "hashtags": "...", "image_prompt": "..."},\n'
+        '      "variant_3": {"hook": "...", "body": "...", "cta": "...", "hashtags": "...", "image_prompt": "..."}\n'
+        '    }'
+    ),
+}
+
+
+def _build_structure(company_name: str, location: str, platforms: list) -> str:
+    platform_blocks = ",\n    ".join(
+        PLATFORM_TEMPLATES[p] for p in platforms if p in PLATFORM_TEMPLATES
+    )
+    return (
+        f'{{\n'
+        f'  "client": "{company_name}",\n'
+        f'  "location": "{location}",\n'
+        f'  "generated_by": "Community Trust Creative Agent",\n'
+        f'  "platforms": {{\n    {platform_blocks}\n  }}\n'
+        f'}}'
+    )
 
 
 def run_copy_gen_agent(brand_brief: dict, company_name: str, location: str, platforms: list) -> dict:
@@ -61,13 +76,15 @@ def run_copy_gen_agent(brand_brief: dict, company_name: str, location: str, plat
         system_prompt=SYSTEM_PROMPT,
     )
 
+    structure = _build_structure(company_name, location, platforms)
+
     result = agent(
         f"Company: {company_name}\n"
         f"Location: {location}\n"
-        f"Platforms: {', '.join(platforms)}\n\n"
+        f"Platforms to generate (ONLY these): {', '.join(platforms)}\n\n"
         f"Brand Brief:\n{json.dumps(brand_brief, indent=2)}\n\n"
-        f"Generate 3 variants per platform. Return this exact JSON structure:\n"
-        f"{CAMPAIGN_STRUCTURE.replace('COMPANY', company_name).replace('LOCATION', location)}"
+        f"Generate 3 variants for ONLY the platforms listed above. Return this exact JSON structure:\n"
+        f"{structure}"
     )
 
     text = str(result)
