@@ -6,7 +6,7 @@
   "image_generation": {
     "enabled": true,
     "provider": "fal",
-    "model": "flux/dev",
+    "model": "flux-pro/v1.1",
     "cost_per_image": 0.025,
     "resolution": "1024x1024"
   },

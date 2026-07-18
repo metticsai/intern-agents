@@ -1,0 +1,24 @@
+{
+  "industry": "professional_services",
+  "description": "Law firms, accounting, real estate, financial planning, insurance, consulting",
+  "examples": [
+    {
+      "angle": "SOCIAL PROOF — results + trust at scale",
+      "headline": "Loudoun's Trusted Tax Team",
+      "hook": "We filed 840 returns for Loudoun families last season. 97% got a refund. 📊",
+      "body": "Cornerstone CPA in Leesburg has done taxes for Northern Virginia families for 19 years — not a franchise, not a chain, a team that picks up the phone. Small business owner? First-time homebuyer? We've seen it all. Book a free 30-minute review before April. No pressure. 🤝",
+      "cta": "Book Now",
+      "hashtags": "#LeesburgVA #LoudounCPA #TaxSeason #SmallBusinessVA #NorthernVirginia #LocalAccountant #TaxHelp",
+      "image_prompt": "Medium shot of a professional woman in her 40s reviewing documents on a laptop at a clean modern desk, warm bright office with large windows overlooking a suburban street, confident and approachable expression, second monitor visible with spreadsheet, shot on Sony A7R IV f/1.8 shallow depth of field, cool daylight color grade with warm wood accents, 4:5 vertical crop, photorealistic"
+    },
+    {
+      "angle": "PAIN POINT — specific fear, direct relief",
+      "headline": "Stop Guessing. Start Planning.",
+      "hook": "Most Ashburn families don't know if they're on track for retirement. Are you? 🔍",
+      "body": "Heritage Financial in Ashburn offers a free 45-minute retirement check-in — no products to sell, just an honest look at where you stand. 312 Loudoun families have walked out with an actual plan instead of a spreadsheet and a prayer. Your appointment is on us. 📅",
+      "cta": "Get Quote",
+      "hashtags": "#AshburnVA #FinancialPlanning #LoudounCounty #RetirementPlanning #NorthernVirginia #FeeOnlyAdvisor #PersonalFinance",
+      "image_prompt": "Close-up two-shot of a financial advisor and a couple in their 50s reviewing a printed chart together at a bright conference table, genuine smiles and eye contact, clean modern office with neutral decor and natural light, warm and trustworthy atmosphere, shot on Sony A7R IV f/2.0, cool-warm balanced color grade, ultra-high detail, 4:5 vertical crop, photorealistic"
+    }
+  ]
+}

@@ -264,6 +264,8 @@ def generate_campaign(scraped_data, company_name, location, config, feedback="")
                     examples_text += f"  hook: {ex['hook']}\n"
                     examples_text += f"  body: {ex['body']}\n"
                     examples_text += f"  cta: {ex['cta']}\n"
+                    if ex.get('image_prompt'):
+                        examples_text += f"  image_prompt: {ex['image_prompt']}\n"
         except Exception:
             pass
 
@@ -430,6 +432,119 @@ def human_review_gate(data):
     print("\n✅ All platforms selected — proceeding to image generation")
     return data
 
+INDUSTRY_PALETTE = {
+    "food_beverage":         {"accent": (210, 120, 30),  "btn": (210, 120, 30),  "btn_txt": (255, 255, 255)},
+    "home_services":         {"accent": (30, 80, 180),   "btn": (30, 80, 180),   "btn_txt": (255, 255, 255)},
+    "health_beauty":         {"accent": (200, 80, 110),  "btn": (200, 80, 110),  "btn_txt": (255, 255, 255)},
+    "health_fitness":        {"accent": (255, 80, 10),   "btn": (255, 80, 10),   "btn_txt": (255, 255, 255)},
+    "retail":                {"accent": (100, 60, 160),  "btn": (100, 60, 160),  "btn_txt": (255, 255, 255)},
+    "professional_services": {"accent": (10, 40, 120),   "btn": (10, 40, 120),   "btn_txt": (255, 255, 255)},
+    "general_business":      {"accent": (99, 102, 241),  "btn": (99, 102, 241),  "btn_txt": (255, 255, 255)},
+}
+
+def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="general_business"):
+    """Full-bleed photo with bold gradient overlay, large headline, hook, and branded CTA button."""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+        import textwrap
+
+        c = INDUSTRY_PALETTE.get(industry, INDUSTRY_PALETTE["general_business"])
+
+        img = Image.open(image_path).convert("RGBA")
+        w, h = img.size
+
+        # ── Dark gradient over bottom 65% ──────────────────────────────
+        overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        ov_draw = ImageDraw.Draw(overlay)
+        grad_start = int(h * 0.28)
+        for y in range(grad_start, h):
+            t = (y - grad_start) / (h - grad_start)
+            alpha = int(235 * min(t ** 0.55, 1.0))
+            ov_draw.line([(0, y), (w, y)], fill=(0, 0, 0, alpha))
+        img = Image.alpha_composite(img, overlay)
+        draw = ImageDraw.Draw(img)
+
+        # ── Fonts ──────────────────────────────────────────────────────
+        fs_hl  = max(int(w * 0.100), 38)   # Very large headline
+        fs_sub = max(int(w * 0.044), 17)
+        fs_btn = max(int(w * 0.042), 16)
+
+        def _font(size, idx=1):
+            for path, i in [
+                ("/System/Library/Fonts/Helvetica.ttc", idx),
+                ("/System/Library/Fonts/Helvetica.ttc", 0),
+                ("/Library/Fonts/Arial Bold.ttf", None),
+                ("/System/Library/Fonts/Arial.ttf", None),
+            ]:
+                if os.path.exists(path):
+                    try:
+                        return ImageFont.truetype(path, size=size, index=i) if i is not None \
+                               else ImageFont.truetype(path, size=size)
+                    except Exception:
+                        continue
+            return ImageFont.load_default()
+
+        hfont = _font(fs_hl, idx=1)    # Bold
+        sfont = _font(fs_sub, idx=0)   # Regular
+        bfont = _font(fs_btn, idx=1)   # Bold
+
+        pad = int(w * 0.07)
+
+        # ── Wrap text ──────────────────────────────────────────────────
+        hl_clean   = (headline[:42] + "…") if len(headline) > 42 else headline
+        hl_lines   = textwrap.wrap(hl_clean,  width=max(int(w / fs_hl * 1.25), 8))[:2]
+        hook_clean = (hook[:90] + "…")      if len(hook) > 90   else hook
+        hook_lines = textwrap.wrap(hook_clean, width=max(int(w / fs_sub * 1.65), 14))[:2]
+
+        lh_hl  = int(fs_hl  * 1.20)
+        lh_sub = int(fs_sub * 1.45)
+
+        # ── Build layout from bottom up ────────────────────────────────
+        bot_margin = int(h * 0.060)
+        btn_h_px   = max(int(h * 0.072), 50)
+        btn_w_px   = max(int(w * 0.56),  180)
+        gap        = int(h * 0.022)
+
+        btn_y      = h - bot_margin - btn_h_px
+        hook_y     = btn_y - gap - len(hook_lines) * lh_sub
+        hl_y       = hook_y - int(h * 0.026) - len(hl_lines) * lh_hl
+
+        # Accent line above headline
+        line_y = hl_y - int(h * 0.022)
+        draw.rectangle([pad, line_y, pad + int(w * 0.12), line_y + max(4, int(h * 0.004))],
+                       fill=(*c["accent"], 255))
+
+        # Headline (white + shadow for contrast)
+        y = hl_y
+        for line in hl_lines:
+            draw.text((pad + 2, y + 2), line, font=hfont, fill=(0, 0, 0, 160))  # shadow
+            draw.text((pad, y),     line, font=hfont, fill=(255, 255, 255, 255))
+            y += lh_hl
+
+        # Hook text
+        y = hook_y
+        for line in hook_lines:
+            draw.text((pad, y), line, font=sfont, fill=(215, 215, 215, 230))
+            y += lh_sub
+
+        # CTA button (left-aligned, wide)
+        draw.rounded_rectangle(
+            [pad, btn_y, pad + btn_w_px, btn_y + btn_h_px],
+            radius=14, fill=(*c["btn"], 255)
+        )
+        label = cta[:18]
+        bbox  = draw.textbbox((0, 0), label, font=bfont)
+        tx    = pad + (btn_w_px - (bbox[2] - bbox[0])) // 2
+        ty    = btn_y + (btn_h_px - (bbox[3] - bbox[1])) // 2
+        draw.text((tx, ty), label, font=bfont, fill=(*c["btn_txt"], 255))
+
+        img.convert("RGB").save(image_path, "JPEG", quality=93)
+        print(f"  ✏️  Ad creative applied ({industry})")
+
+    except Exception as e:
+        print(f"  ⚠️  Ad creative skipped: {e}")
+
+
 def generate_images(data, output_dir, config, industry="general_business"):
     provider = config["image_generation"]["provider"]
     model = config["image_generation"]["model"]
@@ -476,11 +591,17 @@ def generate_images(data, output_dir, config, industry="general_business"):
                     },
                 )
             else:
-                # Text-to-image with detailed prompt
                 result = fal_client.run(
                     f"fal-ai/{model}",
                     arguments={
                         "prompt": image_prompt,
+                        "negative_prompt": (
+                            "blurry, out of focus, low quality, pixelated, noisy, grainy, "
+                            "generic stock photo, cheesy smile, forced pose, watermark, logo, "
+                            "text, caption, oversaturated, overexposed, underexposed, "
+                            "cartoon, illustration, painting, drawing, ugly, deformed, "
+                            "amateur photography, bad lighting, harsh shadows"
+                        ),
                         "image_size": image_sizes.get(platform, "square_hd"),
                         "num_images": 1,
                     },
@@ -491,6 +612,13 @@ def generate_images(data, output_dir, config, industry="general_business"):
             response.raise_for_status()
             with open(image_path, "wb") as f:
                 f.write(response.content)
+
+            # Build designed ad creative layout
+            headline = data["platforms"][platform].get("headline", "")
+            hook = data["platforms"][platform].get("hook", "") or data["platforms"][platform].get("overlay", "")
+            cta = data["platforms"][platform].get("cta", "Learn More")
+            _create_ad_creative(image_path, headline, hook, cta, industry)
+
             data["platforms"][platform]["image_url"] = image_url
             data["platforms"][platform]["image_path"] = image_path
             print(f"  ✅ {platform}: saved to {image_path}")
@@ -503,105 +631,200 @@ def generate_images(data, output_dir, config, industry="general_business"):
 def _save_html_preview(data, output_dir):
     client = data.get("client", "")
     location = data.get("location", "")
-    platforms_html = ""
-
-    PLATFORM_LABELS = {
-        "meta": "Instagram / Meta",
-        "tiktok": "TikTok",
-        "linkedin": "LinkedIn",
-    }
+    cards_html = ""
 
     for platform_key, platform_data in data["platforms"].items():
-        label = PLATFORM_LABELS.get(platform_key, platform_key.title())
-        image_path = platform_data.get("image_path", "")
-        image_tag = f'<img src="../{image_path}" alt="{label} ad image">' if image_path else '<div class="no-image">Image generation disabled</div>'
+        # Relative path — preview.html lives in output_dir, images in output_dir/images/
+        image_rel = f"images/{platform_key}.jpg"
+        has_image = os.path.exists(f"{output_dir}/{image_rel}")
 
         if platform_key == "meta":
-            hook = platform_data.get("hook", "")
+            hook     = platform_data.get("hook", "")
             headline = platform_data.get("headline", "")
-            body = platform_data.get("body", "")
-            cta = platform_data.get("cta", "")
-            hashtags = platform_data.get("hashtags", "")
-            copy_html = f"""
-                <p class="hook">{hook}</p>
-                <p class="body">{body}</p>
-                <div class="cta-bar">
-                    <span class="headline">{headline}</span>
-                    <button class="cta-btn">{cta}</button>
-                </div>
-                <p class="hashtags">{hashtags}</p>"""
-        elif platform_key == "tiktok":
-            overlay = platform_data.get("overlay", "")
-            caption = platform_data.get("caption", "")
-            cta = platform_data.get("cta", "")
-            hashtags = platform_data.get("hashtags", "")
-            copy_html = f"""
-                <p class="overlay-label">[ IMAGE OVERLAY ] <strong>{overlay}</strong></p>
-                <p class="body">{caption}</p>
-                <p class="hook">{cta}</p>
-                <p class="hashtags">{hashtags}</p>"""
-        else:
-            hook = platform_data.get("hook", "")
-            body = platform_data.get("body", "")
-            cta = platform_data.get("cta", "")
-            hashtags = platform_data.get("hashtags", "")
-            copy_html = f"""
-                <p class="hook">{hook}</p>
-                <p class="body">{body}</p>
-                <p class="hook">{cta}</p>
-                <p class="hashtags">{hashtags}</p>"""
+            body     = platform_data.get("body", "")
+            cta      = platform_data.get("cta", "Learn More")
+            tags     = platform_data.get("hashtags", "")
+            if isinstance(tags, list):
+                tags = " ".join(t if t.startswith("#") else f"#{t}" for t in tags)
 
-        platforms_html += f"""
-        <div class="ad-card">
-            <div class="platform-label">{label}</div>
-            <div class="ad-inner">
-                <div class="ad-image">{image_tag}</div>
-                <div class="ad-copy">{copy_html}</div>
-            </div>
-        </div>"""
+            image_block = f'<img class="post-img" src="{image_rel}" alt="Ad image">' if has_image else '<div class="img-placeholder">📷 Image generating...</div>'
+
+            cards_html += f"""
+  <div class="ig-card">
+    <div class="ig-header">
+      <div class="ig-avatar"></div>
+      <div class="ig-meta">
+        <div class="ig-handle">{client}</div>
+        <div class="ig-sponsored">Sponsored</div>
+      </div>
+      <div class="ig-dots">&#8942;</div>
+    </div>
+    <p class="ig-caption"><strong>{hook}</strong></p>
+    {image_block}
+    <div class="ig-actions">
+      <span class="ig-icon">♡</span>
+      <span class="ig-icon">&#128172;</span>
+      <span class="ig-icon">&#10148;</span>
+    </div>
+    <div class="ig-footer-copy">
+      <div class="ig-likes">&#128077; 47 others</div>
+      <p class="ig-body-text"><strong>{client}</strong> {body}</p>
+      <p class="ig-tags">{tags}</p>
+    </div>
+    <div class="ig-cta-row">
+      <div class="ig-cta-info">
+        <div class="ig-domain">{location}</div>
+        <div class="ig-headline">{headline}</div>
+      </div>
+      <button class="ig-cta-btn">{cta}</button>
+    </div>
+  </div>"""
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{client} — Ad Campaign Preview</title>
+<title>{client} — Ad Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; color: #1c1e21; }}
-  header {{ background: #1877f2; color: white; padding: 24px 32px; }}
-  header h1 {{ font-size: 22px; font-weight: 700; }}
-  header p {{ font-size: 14px; opacity: 0.85; margin-top: 4px; }}
-  .badge {{ display: inline-block; background: rgba(255,255,255,0.2); border-radius: 12px; padding: 2px 10px; font-size: 12px; margin-top: 8px; }}
-  main {{ max-width: 960px; margin: 32px auto; padding: 0 16px; }}
-  .ad-card {{ background: white; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.12); margin-bottom: 28px; overflow: hidden; }}
-  .platform-label {{ background: #1877f2; color: white; font-size: 12px; font-weight: 600; padding: 6px 16px; letter-spacing: 0.05em; text-transform: uppercase; }}
-  .ad-inner {{ display: flex; gap: 0; }}
-  .ad-image {{ width: 280px; min-width: 280px; background: #e4e6ea; display: flex; align-items: center; justify-content: center; }}
-  .ad-image img {{ width: 100%; height: 100%; object-fit: cover; display: block; }}
-  .no-image {{ color: #65676b; font-size: 13px; padding: 40px 20px; text-align: center; }}
-  .ad-copy {{ flex: 1; padding: 20px 24px; display: flex; flex-direction: column; gap: 10px; }}
-  .hook {{ font-size: 15px; color: #1c1e21; line-height: 1.5; }}
-  .body {{ font-size: 14px; color: #444; line-height: 1.6; }}
-  .hashtags {{ font-size: 13px; color: #1877f2; line-height: 1.6; }}
-  .overlay-label {{ font-size: 13px; color: #666; }}
-  .cta-bar {{ display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #e4e6ea; padding-top: 12px; margin-top: 4px; }}
-  .headline {{ font-size: 16px; font-weight: 700; color: #1c1e21; }}
-  .cta-btn {{ background: #1877f2; color: white; border: none; border-radius: 6px; padding: 8px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }}
-  footer {{ text-align: center; color: #65676b; font-size: 12px; padding: 24px; }}
-  @media (max-width: 600px) {{ .ad-inner {{ flex-direction: column; }} .ad-image {{ width: 100%; min-width: unset; height: 240px; }} }}
+*, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+body {{
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: #0a0a0a;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 16px 60px;
+  color: #fff;
+}}
+.page-header {{
+  text-align: center;
+  margin-bottom: 36px;
+}}
+.page-eyebrow {{
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6366f1;
+  margin-bottom: 10px;
+}}
+.page-title {{
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 6px;
+}}
+.page-sub {{
+  font-size: 14px;
+  color: #6b7280;
+}}
+/* Instagram card */
+.ig-card {{
+  width: 375px;
+  background: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+  color: #111;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+}}
+.ig-header {{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+}}
+.ig-avatar {{
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+  flex-shrink: 0;
+}}
+.ig-meta {{ flex: 1; }}
+.ig-handle {{ font-size: 13px; font-weight: 700; color: #111; }}
+.ig-sponsored {{ font-size: 11px; color: #8e8e8e; }}
+.ig-dots {{ font-size: 20px; color: #8e8e8e; cursor: pointer; }}
+.ig-caption {{
+  font-size: 13px;
+  color: #111;
+  line-height: 1.5;
+  padding: 0 14px 10px;
+}}
+.post-img {{
+  width: 100%;
+  aspect-ratio: 4/5;
+  object-fit: cover;
+  display: block;
+}}
+.img-placeholder {{
+  width: 100%;
+  aspect-ratio: 4/5;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+}}
+.ig-actions {{
+  display: flex;
+  gap: 14px;
+  padding: 10px 14px 6px;
+}}
+.ig-icon {{ font-size: 22px; cursor: pointer; }}
+.ig-footer-copy {{ padding: 0 14px 10px; }}
+.ig-likes {{ font-size: 13px; font-weight: 600; color: #111; margin-bottom: 4px; }}
+.ig-body-text {{
+  font-size: 13px;
+  color: #333;
+  line-height: 1.5;
+  margin-bottom: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}}
+.ig-tags {{ font-size: 13px; color: #00376b; line-height: 1.5; }}
+.ig-cta-row {{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 14px;
+  border-top: 1px solid #efefef;
+  background: #fafafa;
+}}
+.ig-domain {{ font-size: 10px; color: #8e8e8e; text-transform: uppercase; letter-spacing: 0.05em; }}
+.ig-headline {{ font-size: 14px; font-weight: 700; color: #111; margin-top: 2px; }}
+.ig-cta-btn {{
+  background: #0095f6;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}}
+.footer {{
+  margin-top: 36px;
+  font-size: 11px;
+  color: #374151;
+  letter-spacing: 0.05em;
+}}
 </style>
 </head>
 <body>
-<header>
-  <h1>{client}</h1>
-  <p>{location}</p>
-  <span class="badge">Generated by Community Trust Creative Agent · Mettics Consulting</span>
-</header>
-<main>
-{platforms_html}
-</main>
-<footer>Generated by Mettics Community Trust Creative Agent</footer>
+<div class="page-header">
+  <p class="page-eyebrow">Mettics Creative Agent</p>
+  <h1 class="page-title">{client}</h1>
+  <p class="page-sub">{location} &nbsp;·&nbsp; Instagram / Meta</p>
+</div>
+{cards_html}
+<p class="footer">GENERATED BY METTICS COMMUNITY TRUST CREATIVE AGENT</p>
 </body>
 </html>"""
 

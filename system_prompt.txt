@@ -40,18 +40,20 @@ Generate exactly 3 variants for each platform. Each variant MUST use a different
 
 ## IMAGE PROMPT RULES
 
-image_prompt must describe a real, specific scene a photographer could actually shoot.
+image_prompt must describe a cinematic, photorealistic scene that could run in a premium Instagram campaign.
+DO NOT include any text, logos, words, or typography in the image — text is added separately as an overlay.
 Use the BUSINESS TYPE and IMAGE STYLE from the context to guide the aesthetic.
-Describe: subject, setting, lighting, mood, composition. Make it feel like a real photo, not stock art.
 
-Style guide by business type (use BUSINESS TYPE from context):
-- home_services: Technician actively working on-site, natural daylight through a window, tool belt visible, genuine concentration on the job. Real house setting. NOT a posed stock photo with a forced smile.
-- food_beverage: Hands cupping a steaming drink, overhead flat lay of a signature item with props (newspaper, plant), warm golden-hour window light, moody or bright to match brand vibe.
-- health_beauty: Client mid-service or just-finished, soft natural window light, serene and relaxed expression, clean minimalist salon background.
-- health_fitness: Person mid-exercise with visible effort and determination, dramatic gym lighting or bright outdoor setting, dynamic motion blur optional.
-- retail: Person using or wearing the product in a natural lifestyle context, clean daylight, aspirational but candid.
-- professional_services: Two people in genuine conversation or reviewing results on a laptop, bright clean office or outdoor city setting, confident and credible.
-- general_business: Real people in the actual business setting, natural light, authentic moment — not staged or stock.
+Structure every image_prompt as: [Shot type] of [specific subject] in [specific setting], [lighting], [color grade], [mood/atmosphere], shot on Sony A7R IV, f/1.8 bokeh background, photorealistic, Instagram editorial photography, ultra-high detail, 4:5 vertical crop. IMPORTANT: compose the shot so the main subject fills the upper 60% of the frame — the lower 40% should be a clean, simple background (blurred, out of focus, or minimal) as it will have ad copy placed over it.
+
+Style guide by business type:
+- home_services: Close-up or medium shot of technician actively working — wrench in hand, focused expression, natural daylight streaming through a window. Real residential setting, not a showroom. Warm tones, shallow depth of field.
+- food_beverage: Extreme close-up of the signature drink or dish, steam rising, condensation on glass, warm golden-hour light from the left, moody dark background or bright airy cafe window. Color grade: warm amber and cream tones.
+- health_beauty: Over-the-shoulder medium shot of client mid-service, soft diffused window light, clean minimal background, serene expression, desaturated warm tones with skin-tone glow.
+- health_fitness: Low-angle dynamic shot of person mid-movement — weights, running, yoga — dramatic side lighting, deep shadows, high contrast, energetic and aspirational.
+- retail: Lifestyle flat lay or person naturally using/wearing the product, bright natural daylight, clean white or textured background, aspirational but candid and real.
+- professional_services: Two people in genuine eye contact at a modern desk or coffee meeting, bright airy office, confident and warm, cool-toned with natural highlights.
+- general_business: Candid medium shot of real people in the actual business environment, natural light, genuine moment of interaction or work, editorial feel.
 
 ---
 
