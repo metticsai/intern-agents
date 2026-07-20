@@ -442,30 +442,46 @@ INDUSTRY_PALETTE = {
     "general_business":      {"accent": (99, 102, 241),  "btn": (99, 102, 241),  "btn_txt": (255, 255, 255)},
 }
 
-def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="general_business"):
-    """Full-bleed photo with bold gradient overlay, large headline, hook, and branded CTA button."""
+def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="general_business", eyebrow=""):
+    """Full-bleed photo with a designed brand overlay: eyebrow, big headline, hook, bold CTA pill."""
     try:
         from PIL import Image, ImageDraw, ImageFont
 
         c = INDUSTRY_PALETTE.get(industry, INDUSTRY_PALETTE["general_business"])
+        accent = c["accent"]
+
+        # Brighten the accent so it stays visible on the dark gradient
+        def _bright(rgb, floor=155):
+            r, g, b = rgb
+            lum = 0.299 * r + 0.587 * g + 0.114 * b
+            if lum < floor:
+                k = floor / max(lum, 1)
+                return tuple(min(255, int(ch * k)) for ch in rgb)
+            return rgb
+        accent_bright = _bright(accent)
+        dark_brand = tuple(int(ch * 0.20) for ch in accent)  # brand-tinted shadow
 
         img = Image.open(image_path).convert("RGBA")
         w, h = img.size
 
-        # ── Dark gradient over bottom 65% ──────────────────────────────
+        # ── Brand-tinted gradient over the lower frame ─────────────────
+        # Fades from clear (top) to a dark brand-tinted black (bottom), so the
+        # photo reads as on-brand rather than sitting under a generic black bar.
         overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         ov_draw = ImageDraw.Draw(overlay)
-        grad_start = int(h * 0.28)
+        grad_start = int(h * 0.24)
         for y in range(grad_start, h):
             t = (y - grad_start) / (h - grad_start)
-            alpha = int(235 * min(t ** 0.55, 1.0))
-            ov_draw.line([(0, y), (w, y)], fill=(0, 0, 0, alpha))
+            alpha = int(242 * min(t ** 0.5, 1.0))
+            fill_rgb = tuple(int(dark_brand[i] * t) for i in range(3))
+            ov_draw.line([(0, y), (w, y)], fill=(*fill_rgb, alpha))
         img = Image.alpha_composite(img, overlay)
         draw = ImageDraw.Draw(img)
 
         # ── Fonts ──────────────────────────────────────────────────────
-        fs_sub = max(int(w * 0.044), 17)
-        fs_btn = max(int(w * 0.042), 16)
+        fs_eye = max(int(w * 0.030), 14)
+        fs_sub = max(int(w * 0.042), 17)
+        fs_btn = max(int(w * 0.041), 16)
 
         def _font(size, idx=1):
             for path, i in [
@@ -484,6 +500,16 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
 
         pad = int(w * 0.07)
         avail_w = w - 2 * pad
+
+        # Draw text with manual letter-spacing (PIL has no native tracking)
+        def _draw_tracked(pos, text, font, fill, tracking):
+            x, y = pos
+            for ch in text:
+                draw.text((x, y), ch, font=font, fill=fill)
+                x += draw.textlength(ch, font=font) + tracking
+
+        def _tracked_width(text, font, tracking):
+            return sum(draw.textlength(ch, font=font) + tracking for ch in text)
 
         # ── Auto-fit headline: shrink font until the WHOLE headline fits ──
         # in at most 2 lines. Never truncate — a cut-off headline looks broken.
@@ -513,56 +539,82 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
             return font, _wrap_to_width(text, font, avail_w)[:max_lines], min_size
 
         hfont, hl_lines, fs_hl = _fit_headline(
-            headline.strip(), start=max(int(w * 0.100), 38), min_size=max(int(w * 0.052), 24)
+            headline.strip(), start=max(int(w * 0.098), 38), min_size=max(int(w * 0.052), 24)
         )
-        sfont = _font(fs_sub, idx=0)   # Regular
-        bfont = _font(fs_btn, idx=1)   # Bold
+        efont = _font(fs_eye, idx=1)   # Bold (eyebrow)
+        sfont = _font(fs_sub, idx=0)   # Regular (hook)
+        bfont = _font(fs_btn, idx=1)   # Bold (CTA)
 
         # ── Wrap hook (subtitle can truncate — it's secondary) ─────────
-        hook_clean = (hook[:90] + "…") if len(hook) > 90 else hook
+        hook_clean = (hook[:92] + "…") if len(hook) > 92 else hook
         hook_lines = _wrap_to_width(hook_clean, sfont, avail_w)[:2]
 
-        lh_hl  = int(fs_hl  * 1.20)
-        lh_sub = int(fs_sub * 1.45)
+        lh_hl  = int(fs_hl  * 1.18)
+        lh_sub = int(fs_sub * 1.42)
+
+        # ── CTA pill: sized to label + vector arrow, not a full-width bar ──
+        cta_label = cta[:20]
+        btn_pad_x = int(w * 0.055)
+        btn_h_px  = max(int(h * 0.070), 50)
+        label_w   = int(draw.textlength(cta_label, font=bfont))
+        arrow_len = int(fs_btn * 0.95)
+        arrow_gap = int(fs_btn * 0.60)
+        content_w = label_w + arrow_gap + arrow_len
+        btn_w_px  = max(content_w + 2 * btn_pad_x, int(w * 0.42))
 
         # ── Build layout from bottom up ────────────────────────────────
-        bot_margin = int(h * 0.060)
-        btn_h_px   = max(int(h * 0.072), 50)
-        btn_w_px   = max(int(w * 0.56),  180)
-        gap        = int(h * 0.022)
+        bot_margin = int(h * 0.062)
+        gap        = int(h * 0.024)
 
-        btn_y      = h - bot_margin - btn_h_px
-        hook_y     = btn_y - gap - len(hook_lines) * lh_sub
-        hl_y       = hook_y - int(h * 0.026) - len(hl_lines) * lh_hl
+        btn_y   = h - bot_margin - btn_h_px
+        hook_y  = btn_y - gap - len(hook_lines) * lh_sub
+        hl_y    = hook_y - int(h * 0.024) - len(hl_lines) * lh_hl
+        line_y  = hl_y - int(h * 0.026)
+        eye_y   = line_y - int(h * 0.014) - fs_eye
 
-        # Accent line above headline
-        line_y = hl_y - int(h * 0.022)
-        draw.rectangle([pad, line_y, pad + int(w * 0.12), line_y + max(4, int(h * 0.004))],
-                       fill=(*c["accent"], 255))
+        # Eyebrow (uppercase, tracked, bright brand color)
+        if eyebrow:
+            _draw_tracked((pad, eye_y), eyebrow.upper()[:32], efont,
+                          (*accent_bright, 255), tracking=max(2, int(fs_eye * 0.14)))
 
-        # Headline (white + shadow for contrast)
+        # Accent line
+        draw.rectangle([pad, line_y, pad + int(w * 0.13), line_y + max(4, int(h * 0.004))],
+                       fill=(*accent_bright, 255))
+
+        # Headline (white + soft shadow for contrast on any photo)
         y = hl_y
         for line in hl_lines:
-            draw.text((pad + 2, y + 2), line, font=hfont, fill=(0, 0, 0, 160))  # shadow
+            draw.text((pad + 2, y + 2), line, font=hfont, fill=(0, 0, 0, 150))
             draw.text((pad, y),     line, font=hfont, fill=(255, 255, 255, 255))
             y += lh_hl
 
         # Hook text
         y = hook_y
         for line in hook_lines:
-            draw.text((pad, y), line, font=sfont, fill=(215, 215, 215, 230))
+            draw.text((pad, y), line, font=sfont, fill=(224, 224, 224, 235))
             y += lh_sub
 
-        # CTA button (left-aligned, wide)
+        # CTA pill
         draw.rounded_rectangle(
             [pad, btn_y, pad + btn_w_px, btn_y + btn_h_px],
-            radius=14, fill=(*c["btn"], 255)
+            radius=int(btn_h_px / 2), fill=(*c["btn"], 255)
         )
-        label = cta[:18]
-        bbox  = draw.textbbox((0, 0), label, font=bfont)
-        tx    = pad + (btn_w_px - (bbox[2] - bbox[0])) // 2
-        ty    = btn_y + (btn_h_px - (bbox[3] - bbox[1])) // 2
-        draw.text((tx, ty), label, font=bfont, fill=(*c["btn_txt"], 255))
+        btn_txt_col = (*c["btn_txt"], 255)
+        content_x = pad + (btn_w_px - content_w) // 2
+        # Label (vertically centered)
+        lbbox = draw.textbbox((0, 0), cta_label, font=bfont)
+        ty = btn_y + (btn_h_px - (lbbox[3] - lbbox[1])) // 2 - lbbox[1]
+        draw.text((content_x, ty), cta_label, font=bfont, fill=btn_txt_col)
+        # Vector arrow → (drawn, not a font glyph, so it always renders)
+        ax = content_x + label_w + arrow_gap
+        ay = btn_y + btn_h_px // 2
+        aw = max(2, int(fs_btn * 0.11))
+        draw.line([(ax, ay), (ax + arrow_len, ay)], fill=btn_txt_col, width=aw)
+        hs = int(fs_btn * 0.30)
+        draw.polygon(
+            [(ax + arrow_len, ay), (ax + arrow_len - hs, ay - hs), (ax + arrow_len - hs, ay + hs)],
+            fill=btn_txt_col,
+        )
 
         img.convert("RGB").save(image_path, "JPEG", quality=93)
         print(f"  ✏️  Ad creative applied ({industry})")
@@ -659,7 +711,8 @@ def generate_images(data, output_dir, config, industry="general_business"):
             headline = data["platforms"][platform].get("headline", "")
             hook = data["platforms"][platform].get("hook", "") or data["platforms"][platform].get("overlay", "")
             cta = data["platforms"][platform].get("cta", "Learn More")
-            _create_ad_creative(image_path, headline, hook, cta, industry)
+            eyebrow = data.get("location", "")
+            _create_ad_creative(image_path, headline, hook, cta, industry, eyebrow)
 
             data["platforms"][platform]["image_url"] = image_url
             data["platforms"][platform]["image_path"] = image_path
