@@ -552,7 +552,15 @@ body {
 
 .ig-caption .hook { font-weight: 600; }
 
-/* ── Ad creative mockup (replaces placeholder) ─────────────── */
+/* ── Real generated ad image ───────────────────────────────── */
+.ig-real-img {
+  width: 100%;
+  aspect-ratio: 4/5;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── Ad creative mockup (fallback before images render) ────── */
 .ig-creative {
   width: 100%;
   aspect-ratio: 4/5;

@@ -107,8 +107,29 @@ async def generate(request: Request):
         k: v for k, v in campaign_data["platforms"].items() if k in configured
     }
 
+    industry = session.get("industry", "general_business")
+
+    # Generate a real ad image for every variant so the reviewer picks from
+    # actual creatives. Reuse this session's output dir across regenerations.
+    if config.get("image_generation", {}).get("enabled", False):
+        from main import generate_variant_images, get_output_dir
+        output_dir = session.get("output_dir") or get_output_dir(session["company_name"])
+        session["output_dir"] = output_dir
+        os.makedirs(output_dir, exist_ok=True)
+        try:
+            campaign_data = generate_variant_images(campaign_data, output_dir, config, industry)
+            bust = uuid.uuid4().hex[:8]  # cache-buster so regenerated images refresh
+            for pdata in campaign_data["platforms"].values():
+                for vkey, vdata in pdata.items():
+                    if vkey.startswith("variant_"):
+                        p = vdata.get("image_path", "")
+                        if p and os.path.exists(p):
+                            vdata["image_url"] = f"/api/image/{p}?t={bust}"
+        except Exception as e:
+            return JSONResponse({"error": f"Image generation failed: {e}"}, status_code=500)
+
     campaign_data["_meta"] = {
-        "industry": session.get("industry", "general_business"),
+        "industry": industry,
         "url": session.get("url", ""),
     }
     sessions[session_id]["campaign"] = campaign_data
@@ -133,20 +154,23 @@ async def save(request: Request):
             if variant_key in variants:
                 campaign_data["platforms"][platform_key] = variants[variant_key]
 
-    from main import save_output, get_output_dir, generate_images
+    import shutil
+    from main import save_output, get_output_dir
     config = json.load(open("config.json"))
-    output_dir = get_output_dir(session["company_name"])
-    os.makedirs(output_dir, exist_ok=True)
+    output_dir = session.get("output_dir") or get_output_dir(session["company_name"])
+    os.makedirs(f"{output_dir}/images", exist_ok=True)
 
+    # Images were already generated per-variant at review time. Promote the
+    # selected variant's image to the canonical {platform}.jpg the outputs expect.
     image_urls = {}
-    if config.get("image_generation", {}).get("enabled", False):
-        industry = session.get("industry", "general_business")
-        campaign_data = generate_images(campaign_data, output_dir, config, industry)
-        # Return local processed image URL (post-overlay), not the raw CDN URL
-        for platform, pdata in campaign_data["platforms"].items():
-            local_path = pdata.get("image_path", "")
-            if local_path and os.path.exists(local_path):
-                image_urls[platform] = f"/api/image/{local_path}"
+    for platform, pdata in campaign_data["platforms"].items():
+        src = pdata.get("image_path", "")
+        if src and os.path.exists(src):
+            canonical = f"{output_dir}/images/{platform}.jpg"
+            if os.path.abspath(src) != os.path.abspath(canonical):
+                shutil.copyfile(src, canonical)
+            pdata["image_path"] = canonical
+            image_urls[platform] = f"/api/image/{canonical}"
 
     save_output(campaign_data, output_dir)
 

@@ -623,101 +623,136 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
         print(f"  ⚠️  Ad creative skipped: {e}")
 
 
+NEGATIVE_PROMPT = (
+    "blurry, out of focus, low quality, pixelated, noisy, grainy, "
+    "generic stock photo, cheesy smile, forced pose, watermark, logo, "
+    "text, caption, oversaturated, overexposed, underexposed, "
+    "cartoon, illustration, painting, drawing, ugly, deformed, "
+    "amateur photography, bad lighting, harsh shadows"
+)
+
+IMAGE_SIZES = {
+    "meta": "portrait_4_3",      # 4:5 for Instagram feed
+    "tiktok": "portrait_16_9",   # 9:16 vertical for TikTok
+    "linkedin": "landscape_4_3", # 16:9 horizontal for LinkedIn
+}
+
+
+def _generate_base_image(image_prompt, image_path, platform, industry, config, upscale=True):
+    """Generate ONE raw photo via Fal.ai (optional reference img2img) + AuraSR upscale.
+    Saves to image_path. Does NOT apply the text overlay. Returns the source CDN url."""
+    import fal_client
+    model = config["image_generation"]["model"]
+
+    # Reference image as a style anchor (image-to-image) if one exists for this industry
+    ref_dir = f"client_assets/references/{industry}"
+    ref_images = []
+    if os.path.exists(ref_dir):
+        ref_images = [f for f in os.listdir(ref_dir) if f.lower().endswith((".jpg", ".jpeg", ".png"))]
+
+    if ref_images:
+        with open(f"{ref_dir}/{ref_images[0]}", "rb") as rf:
+            ref_url = fal_client.upload(rf.read(), content_type="image/jpeg")
+        result = fal_client.run(f"fal-ai/{model}", arguments={
+            "prompt": image_prompt,
+            "image_url": ref_url,
+            "image_size": IMAGE_SIZES.get(platform, "square_hd"),
+            "strength": 0.75,
+            "num_images": 1,
+        })
+    else:
+        result = fal_client.run(f"fal-ai/{model}", arguments={
+            "prompt": image_prompt,
+            "negative_prompt": NEGATIVE_PROMPT,
+            "image_size": IMAGE_SIZES.get(platform, "square_hd"),
+            "num_images": 1,
+        })
+
+    image_url = result["images"][0]["url"]
+    response = requests.get(image_url, timeout=60)
+    response.raise_for_status()
+    with open(image_path, "wb") as f:
+        f.write(response.content)
+
+    if upscale:
+        try:
+            with open(image_path, "rb") as f:
+                up_url = fal_client.upload(f.read(), content_type="image/jpeg")
+            up_result = fal_client.run("fal-ai/aura-sr", arguments={
+                "image_url": up_url, "upscaling_factor": 4, "overlapping_tiles": True})
+            up_img = requests.get(up_result["image"]["url"], timeout=60)
+            up_img.raise_for_status()
+            with open(image_path, "wb") as f:
+                f.write(up_img.content)
+        except Exception as up_err:
+            print(f"  ⚠️  Upscale skipped: {up_err}")
+
+    return image_url
+
+
+def generate_variant_images(data, output_dir, config, industry="general_business"):
+    """Generate a real, finished ad image for EVERY variant of every platform — in
+    parallel — so the reviewer can pick based on the actual creative, not a mockup.
+    Each variant gets image_path set to output/.../images/{platform}_{variant}.jpg."""
+    provider = config["image_generation"]["provider"]
+    model = config["image_generation"]["model"]
+    print(f"\n🎨 Generating variant preview images with {provider} ({model})...")
+    images_dir = f"{output_dir}/images"
+    os.makedirs(images_dir, exist_ok=True)
+    eyebrow = data.get("location", "")
+
+    jobs = []
+    for platform, pdata in data["platforms"].items():
+        for vkey, vdata in pdata.items():
+            if vkey.startswith("variant_"):
+                jobs.append((platform, vkey, vdata))
+
+    def _one(job):
+        platform, vkey, vdata = job
+        image_path = f"{images_dir}/{platform}_{vkey}.jpg"
+        try:
+            _generate_base_image(vdata.get("image_prompt", ""), image_path, platform, industry, config)
+            headline = vdata.get("headline", "")
+            hook = vdata.get("hook", "") or vdata.get("overlay", "")
+            cta = vdata.get("cta", "Learn More")
+            _create_ad_creative(image_path, headline, hook, cta, industry, eyebrow)
+            vdata["image_path"] = image_path
+            return f"  ✅ {platform}/{vkey}: {image_path}"
+        except Exception as e:
+            return f"  ⚠️  {platform}/{vkey} failed: {e}"
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=max(len(jobs), 1)) as ex:
+        for line in ex.map(_one, jobs):
+            print(line)
+
+    return data
+
+
 def generate_images(data, output_dir, config, industry="general_business"):
+    """Generate the final image for the SELECTED (flattened) variant of each platform.
+    Used by the CLI path. The web path pre-generates per-variant images instead."""
     provider = config["image_generation"]["provider"]
     model = config["image_generation"]["model"]
     print(f"\n🎨 Generating images with {provider} ({model})...")
     images_dir = f"{output_dir}/images"
     os.makedirs(images_dir, exist_ok=True)
-    active_platforms = list(data["platforms"].keys())
+    eyebrow = data.get("location", "")
 
-    image_sizes = {
-        "meta": "portrait_4_3",      # 4:5 for Instagram feed
-        "tiktok": "portrait_16_9",   # 9:16 vertical for TikTok
-        "linkedin": "landscape_4_3", # 16:9 horizontal for LinkedIn
-    }
-
-    # Check for reference image to use as style anchor (image-to-image)
-    ref_dir = f"client_assets/references/{industry}"
-    ref_images = []
-    if os.path.exists(ref_dir):
-        ref_images = [f for f in os.listdir(ref_dir) if f.lower().endswith((".jpg", ".jpeg", ".png"))]
-    use_reference = bool(ref_images)
-    if use_reference:
-        print(f"  📎 Using reference image for style: {ref_dir}/{ref_images[0]}")
-
-    for platform in active_platforms:
-        image_prompt = data["platforms"][platform].get("image_prompt", "")
+    for platform in list(data["platforms"].keys()):
         image_path = f"{images_dir}/{platform}.jpg"
-
         try:
-            import fal_client
-
-            if use_reference:
-                # Image-to-image: reference guides composition + style, prompt customizes content
-                ref_path = f"{ref_dir}/{ref_images[0]}"
-                with open(ref_path, "rb") as rf:
-                    ref_url = fal_client.upload(rf.read(), content_type="image/jpeg")
-                result = fal_client.run(
-                    f"fal-ai/{model}",
-                    arguments={
-                        "prompt": image_prompt,
-                        "image_url": ref_url,
-                        "image_size": image_sizes.get(platform, "square_hd"),
-                        "strength": 0.75,
-                        "num_images": 1,
-                    },
-                )
-            else:
-                result = fal_client.run(
-                    f"fal-ai/{model}",
-                    arguments={
-                        "prompt": image_prompt,
-                        "negative_prompt": (
-                            "blurry, out of focus, low quality, pixelated, noisy, grainy, "
-                            "generic stock photo, cheesy smile, forced pose, watermark, logo, "
-                            "text, caption, oversaturated, overexposed, underexposed, "
-                            "cartoon, illustration, painting, drawing, ugly, deformed, "
-                            "amateur photography, bad lighting, harsh shadows"
-                        ),
-                        "image_size": image_sizes.get(platform, "square_hd"),
-                        "num_images": 1,
-                    },
-                )
-
-            image_url = result["images"][0]["url"]
-            response = requests.get(image_url, timeout=60)
-            response.raise_for_status()
-            with open(image_path, "wb") as f:
-                f.write(response.content)
-
-            # Upscale 4x with AuraSR for sharper final output
-            try:
-                with open(image_path, "rb") as f:
-                    up_url = fal_client.upload(f.read(), content_type="image/jpeg")
-                up_result = fal_client.run(
-                    "fal-ai/aura-sr",
-                    arguments={"image_url": up_url, "upscaling_factor": 4, "overlapping_tiles": True},
-                )
-                up_img = requests.get(up_result["image"]["url"], timeout=60)
-                up_img.raise_for_status()
-                with open(image_path, "wb") as f:
-                    f.write(up_img.content)
-                print(f"  🔍 Upscaled 4x with AuraSR")
-            except Exception as up_err:
-                print(f"  ⚠️  Upscale skipped: {up_err}")
-
-            # Build designed ad creative layout
+            image_url = _generate_base_image(
+                data["platforms"][platform].get("image_prompt", ""),
+                image_path, platform, industry, config,
+            )
             headline = data["platforms"][platform].get("headline", "")
             hook = data["platforms"][platform].get("hook", "") or data["platforms"][platform].get("overlay", "")
             cta = data["platforms"][platform].get("cta", "Learn More")
-            eyebrow = data.get("location", "")
             _create_ad_creative(image_path, headline, hook, cta, industry, eyebrow)
-
             data["platforms"][platform]["image_url"] = image_url
             data["platforms"][platform]["image_path"] = image_path
             print(f"  ✅ {platform}: saved to {image_path}")
-
         except Exception as e:
             print(f"  ⚠️  {platform} image failed: {e}")
 

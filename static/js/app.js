@@ -117,8 +117,8 @@ async function selectUrl(url) {
     setStage("stage-scrape", "done", `Found ${scrapeData.paragraph_count} content blocks`);
     setStage("stage-generate", "running", "Writing 3 ad variants...");
 
-    document.getElementById("loading-title").textContent = "Writing your ads...";
-    document.getElementById("loading-sub").textContent = "AI is generating 3 campaign-ready variants";
+    document.getElementById("loading-title").textContent = "Building your ads...";
+    document.getElementById("loading-sub").textContent = "Writing copy and rendering a real image for all 3 variants — about 60 seconds";
 
     await runGenerate();
 
@@ -131,6 +131,27 @@ async function selectUrl(url) {
 }
 
 async function runGenerate(feedback = "") {
+  // One request now writes 3 variants AND renders a real ad image for each (~60s).
+  setStage("stage-generate", "running", "Writing 3 ad variants...");
+
+  const imgTicks = [
+    "Generating 3 ad images with Fal.ai...",
+    "Upscaling to 4x resolution...",
+    "Compositing headlines + CTAs...",
+    "Finishing the creatives...",
+  ];
+  // After a few seconds, move the visual focus from copy → image generation
+  const toImage = setTimeout(() => {
+    setStage("stage-generate", "done", "3 variants ready");
+    setStage("stage-validate", "done", "All specs passed");
+    setStage("stage-image", "running", imgTicks[0]);
+  }, 5000);
+  let ti = 0;
+  const ticker = setInterval(() => {
+    ti = Math.min(ti + 1, imgTicks.length - 1);
+    setStage("stage-image", "running", imgTicks[ti]);
+  }, 12000);
+
   try {
     const genRes = await fetch("/api/generate", {
       method: "POST",
@@ -140,17 +161,21 @@ async function runGenerate(feedback = "") {
     const campaign = await genRes.json();
     if (campaign.error) throw new Error(campaign.error);
 
+    clearTimeout(toImage);
+    clearInterval(ticker);
     setStage("stage-generate", "done", "3 variants ready");
-    setStage("stage-validate", "running", "Checking specs...");
-
-    await new Promise(r => setTimeout(r, 400));
     setStage("stage-validate", "done", "All specs passed");
+    setStage("stage-image", "done", "3 ad images ready");
+    await new Promise(r => setTimeout(r, 300));
 
     state.campaign = campaign;
     showReview(campaign);
 
   } catch (err) {
+    clearTimeout(toImage);
+    clearInterval(ticker);
     setStage("stage-generate", "error", err.message);
+    setStage("stage-image", "error", err.message);
     toast("Generation failed: " + err.message, 4000);
     showView("view-home");
     document.getElementById("btn-search").disabled = false;
@@ -249,15 +274,17 @@ function buildVariantCard(variantKey, variant, companyInfo) {
         <div style="margin-left:auto;color:#aaa;font-size:18px">&#8942;</div>
       </div>
 
-      <!-- Ad creative mockup: gradient bg + overlaid copy -->
-      <div class="ig-creative" style="background:linear-gradient(160deg, ${g1} 0%, ${g2} 100%)">
+      <!-- Real generated ad creative (headline/CTA baked in), or gradient fallback -->
+      ${variant.image_url
+        ? `<img class="ig-real-img" src="${variant.image_url}" alt="Ad creative for ${escHtml(headline)}">`
+        : `<div class="ig-creative" style="background:linear-gradient(160deg, ${g1} 0%, ${g2} 100%)">
         <div class="ig-creative-inner">
           <div class="ig-creative-accent" style="background:${accent}"></div>
           <div class="ig-creative-headline">${escHtml(headline)}</div>
           <div class="ig-creative-hook">${escHtml(shortHook)}</div>
           <div class="ig-creative-cta" style="background:${accent}">${escHtml(cta)}</div>
         </div>
-      </div>
+      </div>`}
 
       <!-- Caption below image -->
       <div class="ig-actions-row">
@@ -325,31 +352,9 @@ async function saveSelected() {
 
   const btn = document.getElementById("btn-save");
   btn.disabled = true;
+  btn.textContent = "Saving...";
 
-  // Route through the loading screen so the ~60s image generation
-  // reads as an intentional step, not a frozen button.
-  showView("view-loading");
-  document.getElementById("loading-title").textContent = "Generating your ad image...";
-  document.getElementById("loading-sub").textContent = "Creating a photorealistic image and upscaling it — about 30–60 seconds";
-  setStage("stage-search", "done");
-  setStage("stage-scrape", "done");
-  setStage("stage-generate", "done");
-  setStage("stage-validate", "done");
-  setStage("stage-image", "running", "Painting the scene with Fal.ai...");
-
-  // Gentle status ticker so the stage never looks stuck
-  const ticks = [
-    "Painting the scene with Fal.ai...",
-    "Upscaling to 4x resolution...",
-    "Compositing headline + CTA...",
-    "Finishing the creative...",
-  ];
-  let ti = 0;
-  const ticker = setInterval(() => {
-    ti = Math.min(ti + 1, ticks.length - 1);
-    setStage("stage-image", "running", ticks[ti]);
-  }, 12000);
-
+  // Images are already rendered at review time — save just writes the files.
   try {
     const res = await fetch("/api/save", {
       method: "POST",
@@ -362,20 +367,14 @@ async function saveSelected() {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
 
-    clearInterval(ticker);
-    setStage("stage-image", "done", "Ad image ready");
-    await new Promise(r => setTimeout(r, 350));
-
     state.outputDir = data.output_dir;
     state.outputFiles = data.files;
     showComplete(data);
 
   } catch (err) {
-    clearInterval(ticker);
-    setStage("stage-image", "error", err.message);
     toast("Save failed: " + err.message, 4000);
-    showView("view-review");
     btn.disabled = false;
+    btn.innerHTML = 'Save &amp; Export <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>';
   }
 }
 
