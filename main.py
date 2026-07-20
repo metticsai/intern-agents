@@ -446,7 +446,6 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
     """Full-bleed photo with bold gradient overlay, large headline, hook, and branded CTA button."""
     try:
         from PIL import Image, ImageDraw, ImageFont
-        import textwrap
 
         c = INDUSTRY_PALETTE.get(industry, INDUSTRY_PALETTE["general_business"])
 
@@ -465,7 +464,6 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
         draw = ImageDraw.Draw(img)
 
         # ── Fonts ──────────────────────────────────────────────────────
-        fs_hl  = max(int(w * 0.100), 38)   # Very large headline
         fs_sub = max(int(w * 0.044), 17)
         fs_btn = max(int(w * 0.042), 16)
 
@@ -484,17 +482,45 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
                         continue
             return ImageFont.load_default()
 
-        hfont = _font(fs_hl, idx=1)    # Bold
+        pad = int(w * 0.07)
+        avail_w = w - 2 * pad
+
+        # ── Auto-fit headline: shrink font until the WHOLE headline fits ──
+        # in at most 2 lines. Never truncate — a cut-off headline looks broken.
+        def _wrap_to_width(text, font, max_w):
+            words, lines, cur = text.split(), [], ""
+            for word in words:
+                trial = (cur + " " + word).strip()
+                if draw.textlength(trial, font=font) <= max_w or not cur:
+                    cur = trial
+                else:
+                    lines.append(cur)
+                    cur = word
+            if cur:
+                lines.append(cur)
+            return lines
+
+        def _fit_headline(text, start, min_size, max_lines=2):
+            size = start
+            while size >= min_size:
+                font = _font(size, idx=1)
+                lines = _wrap_to_width(text, font, avail_w)
+                fits_width = all(draw.textlength(ln, font=font) <= avail_w for ln in lines)
+                if len(lines) <= max_lines and fits_width:
+                    return font, lines, size
+                size -= 3
+            font = _font(min_size, idx=1)
+            return font, _wrap_to_width(text, font, avail_w)[:max_lines], min_size
+
+        hfont, hl_lines, fs_hl = _fit_headline(
+            headline.strip(), start=max(int(w * 0.100), 38), min_size=max(int(w * 0.052), 24)
+        )
         sfont = _font(fs_sub, idx=0)   # Regular
         bfont = _font(fs_btn, idx=1)   # Bold
 
-        pad = int(w * 0.07)
-
-        # ── Wrap text ──────────────────────────────────────────────────
-        hl_clean   = (headline[:42] + "…") if len(headline) > 42 else headline
-        hl_lines   = textwrap.wrap(hl_clean,  width=max(int(w / fs_hl * 1.25), 8))[:2]
-        hook_clean = (hook[:90] + "…")      if len(hook) > 90   else hook
-        hook_lines = textwrap.wrap(hook_clean, width=max(int(w / fs_sub * 1.65), 14))[:2]
+        # ── Wrap hook (subtitle can truncate — it's secondary) ─────────
+        hook_clean = (hook[:90] + "…") if len(hook) > 90 else hook
+        hook_lines = _wrap_to_width(hook_clean, sfont, avail_w)[:2]
 
         lh_hl  = int(fs_hl  * 1.20)
         lh_sub = int(fs_sub * 1.45)

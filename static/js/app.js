@@ -162,8 +162,16 @@ function showReview(campaign) {
   document.getElementById("review-company").textContent = state.companyName;
 
   const metaPlatform = campaign.platforms?.meta;
-  const industry = campaign._meta?.industry || campaign.company_info?.industry || "general_business";
-  const location = campaign.company_info?.location || state.location;
+  const industry = campaign._meta?.industry || "general_business";
+  const location = campaign.location || state.location;
+
+  // Build a company-info object from the fields the backend actually sends
+  const companyInfo = {
+    name: campaign.client || state.companyName,
+    website: campaign._meta?.url || "",
+    location: location,
+    industry: industry,
+  };
 
   document.getElementById("review-industry").textContent = "📍 " + location;
   document.getElementById("review-signals").textContent = "🏷 " + industry.replace(/_/g, " ");
@@ -174,7 +182,7 @@ function showReview(campaign) {
   if (metaPlatform) {
     const variants = Object.entries(metaPlatform);
     variants.forEach(([key, variant]) => {
-      grid.appendChild(buildVariantCard(key, variant, campaign.company_info));
+      grid.appendChild(buildVariantCard(key, variant, companyInfo));
     });
   }
 
@@ -215,7 +223,7 @@ function buildVariantCard(variantKey, variant, companyInfo) {
   // Accent color per industry (matches Python palette btn colors)
   const accentMap = {
     food_beverage: "#D2781E", home_services: "#1E50B4", health_beauty: "#C8506E",
-    health_fitness: "#FF5A0A", retail: "#643CA0", professional_services: "#0A28780",
+    health_fitness: "#FF5A0A", retail: "#643CA0", professional_services: "#0A2878",
     general_business: "#6366F1",
   };
   const accent = accentMap[industry] || "#6366F1";
@@ -317,7 +325,30 @@ async function saveSelected() {
 
   const btn = document.getElementById("btn-save");
   btn.disabled = true;
-  btn.textContent = "Generating image...";
+
+  // Route through the loading screen so the ~60s image generation
+  // reads as an intentional step, not a frozen button.
+  showView("view-loading");
+  document.getElementById("loading-title").textContent = "Generating your ad image...";
+  document.getElementById("loading-sub").textContent = "Creating a photorealistic image and upscaling it — about 30–60 seconds";
+  setStage("stage-search", "done");
+  setStage("stage-scrape", "done");
+  setStage("stage-generate", "done");
+  setStage("stage-validate", "done");
+  setStage("stage-image", "running", "Painting the scene with Fal.ai...");
+
+  // Gentle status ticker so the stage never looks stuck
+  const ticks = [
+    "Painting the scene with Fal.ai...",
+    "Upscaling to 4x resolution...",
+    "Compositing headline + CTA...",
+    "Finishing the creative...",
+  ];
+  let ti = 0;
+  const ticker = setInterval(() => {
+    ti = Math.min(ti + 1, ticks.length - 1);
+    setStage("stage-image", "running", ticks[ti]);
+  }, 12000);
 
   try {
     const res = await fetch("/api/save", {
@@ -331,14 +362,20 @@ async function saveSelected() {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
 
+    clearInterval(ticker);
+    setStage("stage-image", "done", "Ad image ready");
+    await new Promise(r => setTimeout(r, 350));
+
     state.outputDir = data.output_dir;
     state.outputFiles = data.files;
     showComplete(data);
 
   } catch (err) {
+    clearInterval(ticker);
+    setStage("stage-image", "error", err.message);
     toast("Save failed: " + err.message, 4000);
+    showView("view-review");
     btn.disabled = false;
-    btn.innerHTML = 'Save &amp; Export <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>';
   }
 }
 
@@ -422,6 +459,7 @@ function startOver() {
   setStage("stage-scrape", "pending", "Scraping site + subpages");
   setStage("stage-generate", "pending", "Claude Sonnet writing 3 variants");
   setStage("stage-validate", "pending", "Spec + compliance check");
+  setStage("stage-image", "pending", "Fal.ai + 4x upscale");
 
   showView("view-home");
 }
