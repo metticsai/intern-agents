@@ -181,66 +181,98 @@ function showReview(campaign) {
   showView("view-review");
 }
 
+const INDUSTRY_GRADIENTS = {
+  food_beverage:         ["#3B1F0A", "#7C4A1E"],
+  home_services:         ["#0A1F3B", "#1A3A6B"],
+  health_beauty:         ["#2D0A1A", "#8B3052"],
+  health_fitness:        ["#0A0A14", "#CC4A08"],
+  retail:                ["#1A0A2E", "#5C3680"],
+  professional_services: ["#060E2A", "#0F2460"],
+  general_business:      ["#111827", "#374151"],
+};
+
 function buildVariantCard(variantKey, variant, companyInfo) {
   const wrapper = document.createElement("div");
   wrapper.className = "ig-wrapper";
 
   const labelMap = { variant_1: "Variant 1", variant_2: "Variant 2", variant_3: "Variant 3" };
-  const angleMap = { variant_1: "Social proof", variant_2: "Urgency", variant_3: "Story" };
+  const angleMap = { variant_1: "Social Proof", variant_2: "Urgency", variant_3: "Story" };
 
   const compliance = variant.compliance || {};
   const complianceStatus = compliance.status || "pass";
 
-  const hook = variant.hook || "";
-  const body = variant.body || "";
-  const cta = variant.cta || "Learn More";
+  const hook     = variant.hook || "";
+  const body     = variant.body || "";
+  const cta      = variant.cta || "Learn More";
   const headline = variant.headline || companyInfo?.name || "";
-  const imagePrompt = variant.image_prompt || "Professional lifestyle photo";
-  const rawTags = variant.hashtags || [];
+  const rawTags  = variant.hashtags || [];
   const tagArray = Array.isArray(rawTags) ? rawTags : String(rawTags).split(/\s+/).filter(Boolean);
   const hashtags = tagArray.map(h => h.startsWith("#") ? h : `#${h}`).join(" ");
-  const domain = companyInfo?.website || "";
+  const domain   = (companyInfo?.website || "").replace(/^https?:\/\//, "").split("/")[0];
+  const industry = state.campaign?._meta?.industry || "general_business";
+  const [g1, g2] = INDUSTRY_GRADIENTS[industry] || INDUSTRY_GRADIENTS.general_business;
 
-  const truncBody = body.length > 100 ? body.slice(0, 100) + "…" : body;
+  // Accent color per industry (matches Python palette btn colors)
+  const accentMap = {
+    food_beverage: "#D2781E", home_services: "#1E50B4", health_beauty: "#C8506E",
+    health_fitness: "#FF5A0A", retail: "#643CA0", professional_services: "#0A28780",
+    general_business: "#6366F1",
+  };
+  const accent = accentMap[industry] || "#6366F1";
+
+  const truncBody = body.length > 120 ? body.slice(0, 120) + "…" : body;
+  const shortHook = hook.length > 80  ? hook.slice(0, 80)  + "…" : hook;
 
   wrapper.innerHTML = `
     <div class="ig-variant-label">
-      ${labelMap[variantKey] || variantKey}
+      <span>${labelMap[variantKey] || variantKey} · <em style="font-weight:400;font-style:normal;color:var(--text-muted)">${angleMap[variantKey]}</em></span>
       <span class="compliance-badge ${complianceStatus}">${complianceStatus.toUpperCase()}</span>
     </div>
 
     <div class="ig-card" id="card-${variantKey}" onclick="toggleVariant('${variantKey}', this)">
+
+      <!-- Instagram header -->
       <div class="ig-top">
         <div class="ig-avatar"></div>
         <div>
-          <div class="ig-handle">${companyInfo?.name || state.companyName}</div>
-          <div class="ig-sponsored-tag">Sponsored · ${angleMap[variantKey] || "angle"}</div>
+          <div class="ig-handle">${escHtml(companyInfo?.name || state.companyName)}</div>
+          <div class="ig-sponsored-tag">Sponsored</div>
+        </div>
+        <div style="margin-left:auto;color:#aaa;font-size:18px">&#8942;</div>
+      </div>
+
+      <!-- Ad creative mockup: gradient bg + overlaid copy -->
+      <div class="ig-creative" style="background:linear-gradient(160deg, ${g1} 0%, ${g2} 100%)">
+        <div class="ig-creative-inner">
+          <div class="ig-creative-accent" style="background:${accent}"></div>
+          <div class="ig-creative-headline">${escHtml(headline)}</div>
+          <div class="ig-creative-hook">${escHtml(shortHook)}</div>
+          <div class="ig-creative-cta" style="background:${accent}">${escHtml(cta)}</div>
         </div>
       </div>
 
-      <div class="ig-caption">
-        <span class="hook">${escHtml(hook)}</span>
+      <!-- Caption below image -->
+      <div class="ig-actions-row">
+        <span class="ig-action-icon">♡</span>
+        <span class="ig-action-icon">&#128172;</span>
+        <span class="ig-action-icon">&#10148;</span>
       </div>
 
-      <div class="ig-image">
-        <div class="ig-image-placeholder">
-          <div>📷</div>
-          <div class="prompt-preview">${escHtml(imagePrompt.slice(0, 80))}…</div>
-        </div>
+      <div class="ig-post-body">
+        <p><strong>${escHtml(companyInfo?.name || state.companyName)}</strong> ${escHtml(truncBody)}</p>
+        ${hashtags ? `<p class="ig-tags">${escHtml(hashtags)}</p>` : ""}
       </div>
-
-      <div class="ig-body-detail">${escHtml(truncBody)}</div>
-      ${hashtags ? `<div class="ig-hashtags">${escHtml(hashtags)}</div>` : ""}
 
       <div class="ig-footer">
         <div>
-          <div class="ig-headline">${escHtml(headline)}</div>
-          <div class="ig-domain">${domain.replace(/^https?:\/\//, "").split("/")[0]}</div>
+          <div class="ig-headline-small">${escHtml(headline)}</div>
+          <div class="ig-domain">${escHtml(domain)}</div>
         </div>
-        <div class="ig-cta-btn">${escHtml(cta)}</div>
+        <div class="ig-cta-btn" style="background:${accent}">${escHtml(cta)}</div>
       </div>
 
-      <button class="select-btn" id="selbtn-${variantKey}" onclick="event.stopPropagation(); toggleVariant('${variantKey}', document.getElementById('card-${variantKey}'))">
+      <button class="select-btn" id="selbtn-${variantKey}"
+        onclick="event.stopPropagation(); toggleVariant('${variantKey}', document.getElementById('card-${variantKey}'))">
         Select this variant
       </button>
     </div>

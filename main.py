@@ -613,6 +613,22 @@ def generate_images(data, output_dir, config, industry="general_business"):
             with open(image_path, "wb") as f:
                 f.write(response.content)
 
+            # Upscale 4x with AuraSR for sharper final output
+            try:
+                with open(image_path, "rb") as f:
+                    up_url = fal_client.upload(f.read(), content_type="image/jpeg")
+                up_result = fal_client.run(
+                    "fal-ai/aura-sr",
+                    arguments={"image_url": up_url, "upscaling_factor": 4, "overlapping_tiles": True},
+                )
+                up_img = requests.get(up_result["image"]["url"], timeout=60)
+                up_img.raise_for_status()
+                with open(image_path, "wb") as f:
+                    f.write(up_img.content)
+                print(f"  🔍 Upscaled 4x with AuraSR")
+            except Exception as up_err:
+                print(f"  ⚠️  Upscale skipped: {up_err}")
+
             # Build designed ad creative layout
             headline = data["platforms"][platform].get("headline", "")
             hook = data["platforms"][platform].get("hook", "") or data["platforms"][platform].get("overlay", "")
@@ -634,9 +650,15 @@ def _save_html_preview(data, output_dir):
     cards_html = ""
 
     for platform_key, platform_data in data["platforms"].items():
-        # Relative path — preview.html lives in output_dir, images in output_dir/images/
-        image_rel = f"images/{platform_key}.jpg"
-        has_image = os.path.exists(f"{output_dir}/{image_rel}")
+        # Embed image as base64 so preview.html is self-contained (works when downloaded)
+        image_abs = f"{output_dir}/images/{platform_key}.jpg"
+        if os.path.exists(image_abs):
+            import base64
+            with open(image_abs, "rb") as _f:
+                _b64 = base64.b64encode(_f.read()).decode()
+            image_block = f'<img class="post-img" src="data:image/jpeg;base64,{_b64}" alt="Ad image">'
+        else:
+            image_block = '<div class="img-placeholder">📷</div>'
 
         if platform_key == "meta":
             hook     = platform_data.get("hook", "")
@@ -647,7 +669,7 @@ def _save_html_preview(data, output_dir):
             if isinstance(tags, list):
                 tags = " ".join(t if t.startswith("#") else f"#{t}" for t in tags)
 
-            image_block = f'<img class="post-img" src="{image_rel}" alt="Ad image">' if has_image else '<div class="img-placeholder">📷 Image generating...</div>'
+            # image_block already set above via base64 embed
 
             cards_html += f"""
   <div class="ig-card">

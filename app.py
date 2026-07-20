@@ -142,9 +142,11 @@ async def save(request: Request):
     if config.get("image_generation", {}).get("enabled", False):
         industry = session.get("industry", "general_business")
         campaign_data = generate_images(campaign_data, output_dir, config, industry)
+        # Return local processed image URL (post-overlay), not the raw CDN URL
         for platform, pdata in campaign_data["platforms"].items():
-            if "image_url" in pdata:
-                image_urls[platform] = pdata["image_url"]
+            local_path = pdata.get("image_path", "")
+            if local_path and os.path.exists(local_path):
+                image_urls[platform] = f"/api/image/{local_path}"
 
     save_output(campaign_data, output_dir)
 
@@ -154,6 +156,13 @@ async def save(request: Request):
         "files": [f for f in ["meta.md", "tiktok.md", "linkedin.md", "campaign.json", "preview.html", "meta_export.json"]
                   if os.path.exists(f"{output_dir}/{f}")],
     }
+
+
+@app.get("/api/image/{filepath:path}")
+async def serve_image(filepath: str):
+    if not os.path.exists(filepath):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return FileResponse(filepath, media_type="image/jpeg")
 
 
 @app.get("/api/download/{output_dir:path}/{filename}")
