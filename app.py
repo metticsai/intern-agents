@@ -117,7 +117,9 @@ async def generate(request: Request):
         session["output_dir"] = output_dir
         os.makedirs(output_dir, exist_ok=True)
         try:
-            campaign_data = generate_variant_images(campaign_data, output_dir, config, industry)
+            site_photos = session.get("scraped", {}).get("images", [])
+            campaign_data = generate_variant_images(
+                campaign_data, output_dir, config, industry, scraped_images=site_photos)
             bust = uuid.uuid4().hex[:8]  # cache-buster so regenerated images refresh
             for pdata in campaign_data["platforms"].values():
                 for vkey, vdata in pdata.items():

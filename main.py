@@ -172,6 +172,59 @@ def _extract_brand_signals(all_text):
 
     return signals
 
+def _collect_site_images(base_url, soup, headers):
+    """Find real product/hero photos on the site: og:image plus every large <img>.
+    Candidates are downloaded in parallel and only genuinely large photos survive
+    (min 500x400, sane aspect ratio), ranked by pixel area. Returns up to 6 URLs."""
+    from urllib.parse import urljoin
+    from io import BytesIO
+    from PIL import Image as PILImage
+
+    candidates = []
+    for meta in soup.find_all("meta", attrs={"property": ["og:image", "og:image:secure_url"]}):
+        if meta.get("content"):
+            candidates.append(urljoin(base_url, meta["content"]))
+    for tag in soup.find_all("img"):
+        src = tag.get("src") or tag.get("data-src") or ""
+        if not src and tag.get("srcset"):
+            src = tag["srcset"].split(",")[-1].strip().split(" ")[0]
+        if not src:
+            continue
+        low = src.lower()
+        if low.startswith("data:") or any(x in low for x in (
+                ".svg", ".gif", "logo", "icon", "sprite", "favicon",
+                "placeholder", "avatar", "badge", "payment")):
+            continue
+        candidates.append(urljoin(base_url, src))
+
+    seen, unique = set(), []
+    for c in candidates:
+        if c not in seen:
+            seen.add(c)
+            unique.append(c)
+
+    def _check(img_url):
+        try:
+            r = requests.get(img_url, headers=headers, timeout=6)
+            r.raise_for_status()
+            im = PILImage.open(BytesIO(r.content))
+            w, h = im.size
+            if w >= 500 and h >= 400 and 0.4 <= w / h <= 2.6:
+                return (w * h, img_url)
+        except Exception:
+            pass
+        return None
+
+    from concurrent.futures import ThreadPoolExecutor
+    results = []
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        for res in ex.map(_check, unique[:12]):
+            if res:
+                results.append(res)
+    results.sort(key=lambda x: x[0], reverse=True)
+    return [u for _, u in results[:6]]
+
+
 def scrape_website(url):
     print(f"\n🌐 Scraping {url}...")
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -207,12 +260,10 @@ def scrape_website(url):
 
     brand_signals = _extract_brand_signals(all_text)
 
-    # Collect hero/product images from homepage
-    images = []
-    for tag in home["soup"].find_all("img"):
-        src = tag.get("src", "")
-        if src and not src.endswith(".svg") and ("hero" in src.lower() or "logo" in src.lower()):
-            images.append(src)
+    # Collect real product/hero photos from the homepage (validated by download)
+    images = _collect_site_images(url, home["soup"], headers)
+    if images:
+        print(f"  📷 Found {len(images)} usable photos on the site")
 
     scraped = {
         "url": url,
@@ -731,28 +782,76 @@ def _generate_base_image(image_prompt, image_path, platform, industry, config, u
         f.write(response.content)
 
     if upscale:
-        try:
-            with open(image_path, "rb") as f:
-                up_url = fal_client.upload(f.read(), content_type="image/jpeg")
-            up_result = fal_client.run("fal-ai/aura-sr", arguments={
-                "image_url": up_url, "upscaling_factor": 4, "overlapping_tiles": True})
-            up_img = requests.get(up_result["image"]["url"], timeout=60)
-            up_img.raise_for_status()
-            with open(image_path, "wb") as f:
-                f.write(up_img.content)
-        except Exception as up_err:
-            print(f"  ⚠️  Upscale skipped: {up_err}")
+        _upscale_inplace(image_path)
 
     return image_url
 
 
-def generate_variant_images(data, output_dir, config, industry="general_business"):
+def _upscale_inplace(image_path):
+    """4x AuraSR upscale of a saved image, in place. Silently skipped on failure."""
+    import fal_client
+    try:
+        with open(image_path, "rb") as f:
+            up_url = fal_client.upload(f.read(), content_type="image/jpeg")
+        up_result = fal_client.run("fal-ai/aura-sr", arguments={
+            "image_url": up_url, "upscaling_factor": 4, "overlapping_tiles": True})
+        up_img = requests.get(up_result["image"]["url"], timeout=60)
+        up_img.raise_for_status()
+        with open(image_path, "wb") as f:
+            f.write(up_img.content)
+    except Exception as up_err:
+        print(f"  ⚠️  Upscale skipped: {up_err}")
+
+
+KONTEXT_ASPECTS = {"meta": "3:4", "tiktok": "9:16", "linkedin": "16:9"}
+
+EDIT_PROMPT = (
+    "Turn this photo into a premium Instagram advertisement photograph. Keep the exact "
+    "same subject, products, people and setting — clearly recognizable, nothing replaced. "
+    "Apply professional commercial retouching: bright natural daylight, vibrant saturated "
+    "colors, crisp sharp focus on the main subject, clean uncluttered composition with the "
+    "subject in the upper two thirds of the frame. Make the bottom third of the frame "
+    "simple and softly blurred so ad copy can be placed over it. "
+    "No text, no logos, no watermarks in the image."
+)
+
+
+def _edit_scraped_image(source_url, image_path, platform, config):
+    """Re-shoot a real photo from the client's website with Fal's Kontext editing model:
+    the actual product/venue stays recognizable, but lighting, color and composition are
+    upgraded to ad quality. Saves to image_path."""
+    import fal_client
+    r = requests.get(source_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+    r.raise_for_status()
+    up_url = fal_client.upload(r.content, content_type="image/jpeg")
+    result = fal_client.run("fal-ai/flux-pro/kontext", arguments={
+        "prompt": EDIT_PROMPT,
+        "image_url": up_url,
+        "aspect_ratio": KONTEXT_ASPECTS.get(platform, "3:4"),
+        "guidance_scale": 3.5,
+        "output_format": "jpeg",
+    })
+    img_url = result["images"][0]["url"]
+    resp = requests.get(img_url, timeout=60)
+    resp.raise_for_status()
+    with open(image_path, "wb") as f:
+        f.write(resp.content)
+    _upscale_inplace(image_path)
+
+
+def generate_variant_images(data, output_dir, config, industry="general_business", scraped_images=None):
     """Generate a real, finished ad image for EVERY variant of every platform — in
     parallel — so the reviewer can pick based on the actual creative, not a mockup.
-    Each variant gets image_path set to output/.../images/{platform}_{variant}.jpg."""
+    When the client's website has real photos, each variant remixes a DIFFERENT site
+    photo via Kontext (actual product/venue in the ad); fresh generation is the
+    fallback. Each variant gets image_path = output/.../images/{platform}_{variant}.jpg."""
     provider = config["image_generation"]["provider"]
     model = config["image_generation"]["model"]
-    print(f"\n🎨 Generating variant preview images with {provider} ({model})...")
+    scraped_images = scraped_images or []
+    if scraped_images:
+        print(f"\n🎨 Remixing {len(scraped_images)} real site photos with Kontext (+ {provider} {model} fallback)...")
+    else:
+        print(f"\n🎨 Generating variant preview images with {provider} ({model})...")
     images_dir = f"{output_dir}/images"
     os.makedirs(images_dir, exist_ok=True)
     eyebrow = data.get("location", "")
@@ -767,13 +866,26 @@ def generate_variant_images(data, output_dir, config, industry="general_business
         platform, vkey, vdata = job
         image_path = f"{images_dir}/{platform}_{vkey}.jpg"
         try:
-            _generate_base_image(vdata.get("image_prompt", ""), image_path, platform, industry, config)
+            # variant_1 → site photo 1, variant_2 → site photo 2, ... so the three
+            # ads don't all look like the same template with different text
+            vnum = int(vkey.split("_")[-1]) - 1
+            source = scraped_images[vnum] if vnum < len(scraped_images) else None
+            made_from = "generated"
+            if source:
+                try:
+                    _edit_scraped_image(source, image_path, platform, config)
+                    made_from = "site photo"
+                except Exception as edit_err:
+                    print(f"  ⚠️  {platform}/{vkey} photo edit failed ({edit_err}) — generating fresh")
+                    _generate_base_image(vdata.get("image_prompt", ""), image_path, platform, industry, config)
+            else:
+                _generate_base_image(vdata.get("image_prompt", ""), image_path, platform, industry, config)
             headline = vdata.get("headline", "")
             hook = vdata.get("hook", "") or vdata.get("overlay", "")
             cta = vdata.get("cta", "Learn More")
             _create_ad_creative(image_path, headline, hook, cta, industry, eyebrow)
             vdata["image_path"] = image_path
-            return f"  ✅ {platform}/{vkey}: {image_path}"
+            return f"  ✅ {platform}/{vkey} ({made_from}): {image_path}"
         except Exception as e:
             return f"  ⚠️  {platform}/{vkey} failed: {e}"
 
