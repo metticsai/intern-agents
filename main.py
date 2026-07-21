@@ -56,27 +56,75 @@ def _find_subpages(base_url, soup):
                 found.append(full)
     return found[:4]
 
+INDUSTRY_KEYWORDS = {
+    # Scored with word boundaries — the industry with the most keyword hits wins.
+    # This prevents e.g. "Southern Thai heat" matching home_services' "heat".
+    "food_beverage": [
+        "restaurant", "menu", "chef", "cuisine", "dish", "dishes", "dining", "dine",
+        "coffee", "cafe", "café", "bakery", "pizza", "sushi", "thai", "taco", "tacos",
+        "brunch", "brewery", "brewing", "bistro", "diner", "eatery", "catering",
+        "takeout", "cocktails", "appetizers", "entrees", "dessert", "flavors", "foodie",
+    ],
+    "home_services": [
+        "plumbing", "plumber", "plumbers", "hvac", "heating", "cooling", "furnace",
+        "electrician", "electrical", "roofing", "roofer", "landscaping", "lawn",
+        "pest", "handyman", "drain", "drains", "sewer", "gutter", "gutters",
+        "water heater", "air conditioning", "remodeling", "renovation", "contractor",
+    ],
+    "health_beauty": [
+        "salon", "spa", "stylist", "haircut", "hairstyle", "manicure", "pedicure",
+        "massage", "barber", "barbershop", "facial", "facials", "skincare", "lashes",
+        "waxing", "botox", "esthetician", "blowout", "balayage", "nails",
+    ],
+    "health_fitness": [
+        "gym", "fitness", "yoga", "pilates", "crossfit", "workout", "workouts",
+        "training", "trainer", "trainers", "athletes", "cardio", "strength",
+        "membership", "classes", "coaching", "bootcamp",
+    ],
+    "professional_services": [
+        "attorney", "attorneys", "law", "legal", "accounting", "accountant", "cpa",
+        "tax", "taxes", "consulting", "consultant", "insurance", "realtor",
+        "real estate", "mortgage", "advisor", "advisors", "financial", "bookkeeping",
+    ],
+    "retail": [
+        "boutique", "shop", "store", "retail", "clothing", "apparel", "jewelry",
+        "gifts", "accessories", "collection", "collections", "merchandise",
+    ],
+}
+
+INDUSTRY_STYLE_HINTS = {
+    "home_services": "Technician actively working on-site, natural daylight, tool belt visible, real house setting. NOT posed stock.",
+    "food_beverage": "Signature dish or drink as the hero, bright natural daylight, vibrant appetizing colors, fresh ingredients visible. Bright and inviting, not dark.",
+    "health_beauty": "Client mid-service or just-finished, soft natural window light, serene and relaxed, clean minimalist salon background.",
+    "health_fitness": "Person mid-exercise with visible effort and determination, bright energetic gym or outdoor setting, dynamic motion.",
+    "professional_services": "Two people in genuine conversation or reviewing results on a laptop, bright clean office, confident and credible.",
+    "retail": "Person using or wearing the product in a natural lifestyle context, clean daylight, aspirational but candid.",
+    "general_business": "Real people in the actual business setting, natural light, authentic candid moment — not staged or stock.",
+}
+
+
 def _detect_industry(scraped_data):
-    """Classify business type from scraped content. Returns (industry_key, image_style_hint)."""
+    """Classify business type from scraped content. Returns (industry_key, image_style_hint).
+    Scores every industry by whole-word keyword hits and picks the highest — a single
+    stray substring can no longer misclassify (e.g. a Thai restaurant as home services)."""
+    import re
     all_text = " ".join(
         scraped_data.get("paragraphs", []) +
         scraped_data.get("h1", []) +
         scraped_data.get("h2", [])
     ).lower()
 
-    if any(k in all_text for k in ["plumb", "hvac", "heat", "cool", "electric", "roof", "landscap", "pest", "handyman", "drain", "sewer", "gutter"]):
-        return "home_services", "Technician actively working on-site, natural daylight, tool belt visible, real house setting. NOT posed stock."
-    if any(k in all_text for k in ["coffee", "cafe", "café", "restaurant", "food", "bar", "bakery", "pizza", "sushi", "taco", "brew", "bistro", "diner", "eatery"]):
-        return "food_beverage", "Hands cupping a steaming drink or holding signature item. Warm golden-hour window light. Overhead flat lay with natural props. Moody or bright to match brand."
-    if any(k in all_text for k in ["salon", "spa", "hair", "nail", "massage", "beauty", "barber", "skin", "facial", "wellness", "wax"]):
-        return "health_beauty", "Client mid-service or just-finished, soft natural window light, serene and relaxed, clean minimalist salon background."
-    if any(k in all_text for k in ["gym", "fitness", "yoga", "personal train", "crossfit", "sport", "workout", "pilates"]):
-        return "health_fitness", "Person mid-exercise with visible effort and determination, dramatic gym lighting or bright outdoor setting, dynamic motion."
-    if any(k in all_text for k in ["law", "attorney", "legal", "accounting", "finance", "consult", "insurance", "real estate", "mortgage", "advisor"]):
-        return "professional_services", "Two people in genuine conversation or reviewing results on a laptop, bright clean office, confident and credible."
-    if any(k in all_text for k in ["shop", "store", "retail", "boutique", "clothing", "jewel", "gift", "apparel"]):
-        return "retail", "Person using or wearing the product in a natural lifestyle context, clean daylight, aspirational but candid."
-    return "general_business", "Real people in the actual business setting, natural light, authentic candid moment — not staged or stock."
+    scores = {}
+    for industry, keywords in INDUSTRY_KEYWORDS.items():
+        score = 0
+        for kw in keywords:
+            score += len(re.findall(rf"\b{re.escape(kw)}\b", all_text))
+        scores[industry] = score
+
+    best = max(scores, key=scores.get)
+    if scores[best] == 0:
+        best = "general_business"
+    return best, INDUSTRY_STYLE_HINTS[best]
 
 
 def _extract_brand_signals(all_text):
@@ -445,7 +493,7 @@ INDUSTRY_PALETTE = {
 def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="general_business", eyebrow=""):
     """Full-bleed photo with a designed brand overlay: eyebrow, big headline, hook, bold CTA pill."""
     try:
-        from PIL import Image, ImageDraw, ImageFont
+        from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 
         c = INDUSTRY_PALETTE.get(industry, INDUSTRY_PALETTE["general_business"])
         accent = c["accent"]
@@ -461,18 +509,25 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
         accent_bright = _bright(accent)
         dark_brand = tuple(int(ch * 0.20) for ch in accent)  # brand-tinted shadow
 
-        img = Image.open(image_path).convert("RGBA")
+        img = Image.open(image_path).convert("RGB")
+
+        # ── Subtle vibrance pass: brighter, punchier, more "ad-ready" ──
+        img = ImageEnhance.Brightness(img).enhance(1.06)
+        img = ImageEnhance.Color(img).enhance(1.14)
+        img = ImageEnhance.Contrast(img).enhance(1.04)
+        img = img.convert("RGBA")
         w, h = img.size
 
         # ── Brand-tinted gradient over the lower frame ─────────────────
         # Fades from clear (top) to a dark brand-tinted black (bottom), so the
         # photo reads as on-brand rather than sitting under a generic black bar.
+        # Starts lower + ramps gentler than before so more of the photo shows.
         overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         ov_draw = ImageDraw.Draw(overlay)
-        grad_start = int(h * 0.24)
+        grad_start = int(h * 0.34)
         for y in range(grad_start, h):
             t = (y - grad_start) / (h - grad_start)
-            alpha = int(242 * min(t ** 0.5, 1.0))
+            alpha = int(230 * min(t ** 0.62, 1.0))
             fill_rgb = tuple(int(dark_brand[i] * t) for i in range(3))
             ov_draw.line([(0, y), (w, y)], fill=(*fill_rgb, alpha))
         img = Image.alpha_composite(img, overlay)
@@ -508,9 +563,6 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
                 draw.text((x, y), ch, font=font, fill=fill)
                 x += draw.textlength(ch, font=font) + tracking
 
-        def _tracked_width(text, font, tracking):
-            return sum(draw.textlength(ch, font=font) + tracking for ch in text)
-
         # ── Auto-fit headline: shrink font until the WHOLE headline fits ──
         # in at most 2 lines. Never truncate — a cut-off headline looks broken.
         def _wrap_to_width(text, font, max_w):
@@ -545,9 +597,11 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
         sfont = _font(fs_sub, idx=0)   # Regular (hook)
         bfont = _font(fs_btn, idx=1)   # Bold (CTA)
 
-        # ── Wrap hook (subtitle can truncate — it's secondary) ─────────
-        hook_clean = (hook[:92] + "…") if len(hook) > 92 else hook
-        hook_lines = _wrap_to_width(hook_clean, sfont, avail_w)[:2]
+        # ── Wrap hook (secondary — may truncate, but always with an ellipsis) ──
+        hook_lines = _wrap_to_width(hook.strip(), sfont, avail_w)
+        if len(hook_lines) > 2:
+            hook_lines = hook_lines[:2]
+            hook_lines[1] = hook_lines[1].rstrip(" ,;—-") + "…"
 
         lh_hl  = int(fs_hl  * 1.18)
         lh_sub = int(fs_sub * 1.42)
@@ -628,7 +682,9 @@ NEGATIVE_PROMPT = (
     "generic stock photo, cheesy smile, forced pose, watermark, logo, "
     "text, caption, oversaturated, overexposed, underexposed, "
     "cartoon, illustration, painting, drawing, ugly, deformed, "
-    "amateur photography, bad lighting, harsh shadows"
+    "amateur photography, bad lighting, harsh shadows, "
+    "dark, dim, gloomy, dimly lit, low-key lighting, heavy vignette, "
+    "candlelit darkness, murky, dull colors, desaturated, flat lighting"
 )
 
 IMAGE_SIZES = {

@@ -19,6 +19,7 @@ Generate exactly 3 variants for each platform. Each variant MUST use a different
 - hook: Primary text shown ABOVE the image. Under 125 chars. This is the first thing they read — make it stop the scroll.
 - body: 2-3 sentences that build on the hook. Specific, emotional, local. Use 2-4 emojis naturally.
 - cta: MUST be exactly one of these Meta button options (nothing else): Book Now / Call Now / Get Quote / Learn More / Contact Us / Sign Up / Shop Now / Send Message
+  Pick the CTA that fits the business type: restaurants/cafes/salons/gyms → Book Now or Learn More; contractors/trades/repairs → Get Quote or Call Now; retail/boutiques → Shop Now. NEVER use Get Quote for a restaurant, cafe, salon, or store.
 - hashtags: 6-8 tags mixing local (#BrambletonVA), niche (#LocalPlumber), and broad (#HomeRepair). String format.
 - image_prompt: Vertical 4:5 portrait for Instagram feed. [See IMAGE PROMPT RULES below]
 
@@ -46,14 +47,16 @@ Use the BUSINESS TYPE and IMAGE STYLE from the context to guide the aesthetic.
 
 Structure every image_prompt as: [Shot type] of [specific subject] in [specific setting], [lighting], [color grade], [mood/atmosphere], shot on Sony A7R IV, f/1.8 bokeh background, photorealistic, Instagram editorial photography, ultra-high detail, 4:5 vertical crop. IMPORTANT: compose the shot so the main subject fills the upper 60% of the frame — the lower 40% should be a clean, simple background (blurred, out of focus, or minimal) as it will have ad copy placed over it.
 
+LIGHTING RULE (applies to every image_prompt): default to BRIGHT, well-lit, vibrant scenes — natural daylight, airy, colorful, inviting. Always include words like "bright natural daylight" and "vibrant colors" in the prompt. NEVER describe dark, moody, dim, candlelit, or low-key scenes. Ads must feel fresh and energetic, not atmospheric.
+
 Style guide by business type:
-- home_services: Close-up or medium shot of technician actively working — wrench in hand, focused expression, natural daylight streaming through a window. Real residential setting, not a showroom. Warm tones, shallow depth of field.
-- food_beverage: Extreme close-up of the signature drink or dish, steam rising, condensation on glass, warm golden-hour light from the left, moody dark background or bright airy cafe window. Color grade: warm amber and cream tones.
-- health_beauty: Over-the-shoulder medium shot of client mid-service, soft diffused window light, clean minimal background, serene expression, desaturated warm tones with skin-tone glow.
-- health_fitness: Low-angle dynamic shot of person mid-movement — weights, running, yoga — dramatic side lighting, deep shadows, high contrast, energetic and aspirational.
+- home_services: Close-up or medium shot of technician actively working — wrench in hand, focused expression, bright natural daylight streaming through a window. Real residential setting, not a showroom. Warm clean tones, shallow depth of field.
+- food_beverage: Hero shot of the signature dish or drink, steam rising, vibrant saturated colors that make the food look irresistible, bright natural daylight from a large window, fresh ingredients visible, clean bright background — think fresh daytime food photography, appetizing and colorful, never dark or candlelit.
+- health_beauty: Over-the-shoulder medium shot of client mid-service, soft bright window light, clean minimal background, serene expression, fresh glowing skin tones, light and airy.
+- health_fitness: Dynamic shot of person mid-movement — weights, running, yoga — bright energetic lighting, vivid colors, sunlit gym or outdoor golden morning light, powerful and aspirational.
 - retail: Lifestyle flat lay or person naturally using/wearing the product, bright natural daylight, clean white or textured background, aspirational but candid and real.
-- professional_services: Two people in genuine eye contact at a modern desk or coffee meeting, bright airy office, confident and warm, cool-toned with natural highlights.
-- general_business: Candid medium shot of real people in the actual business environment, natural light, genuine moment of interaction or work, editorial feel.
+- professional_services: Two people in genuine eye contact at a modern desk or coffee meeting, bright airy office, confident and warm, natural highlights, crisp and clean.
+- general_business: Candid medium shot of real people in the actual business environment, bright natural light, genuine moment of interaction or work, editorial feel.
 
 ---
 
