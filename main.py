@@ -541,10 +541,17 @@ INDUSTRY_PALETTE = {
     "general_business":      {"accent": (99, 102, 241),  "btn": (99, 102, 241),  "btn_txt": (255, 255, 255)},
 }
 
-def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="general_business", eyebrow=""):
-    """Full-bleed photo with a designed brand overlay: eyebrow, big headline, hook, bold CTA pill."""
+def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="general_business",
+                        eyebrow="", layout="classic", signals=None):
+    """Full-bleed photo with a designed brand overlay. Three layout archetypes so the
+    variants read as distinct ads, not one template with swapped text:
+      - social_proof: gold star row + real rating/review numbers above the headline
+      - bold:         oversized headline with a brand-color marker behind the key word
+      - editorial:    centered serif composition with an outlined CTA (story ads)
+      - classic:      the original left-aligned stack (CLI fallback)"""
     try:
         from PIL import Image, ImageDraw, ImageFont, ImageEnhance
+        import math
 
         c = INDUSTRY_PALETTE.get(industry, INDUSTRY_PALETTE["general_business"])
         accent = c["accent"]
@@ -607,12 +614,33 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
         pad = int(w * 0.07)
         avail_w = w - 2 * pad
 
+        # Serif for the editorial layout (Georgia reads "crafted", not "generated")
+        def _serif(size):
+            for p in ["/System/Library/Fonts/Supplemental/Georgia Bold.ttf",
+                      "/System/Library/Fonts/Supplemental/Georgia.ttf",
+                      "/System/Library/Fonts/Supplemental/Times New Roman Bold.ttf"]:
+                if os.path.exists(p):
+                    try:
+                        return ImageFont.truetype(p, size=size)
+                    except Exception:
+                        continue
+            return _font(size, idx=1)
+
         # Draw text with manual letter-spacing (PIL has no native tracking)
         def _draw_tracked(pos, text, font, fill, tracking):
             x, y = pos
             for ch in text:
                 draw.text((x, y), ch, font=font, fill=fill)
                 x += draw.textlength(ch, font=font) + tracking
+
+        # 5-point star, drawn as a polygon so it renders in every font environment
+        def _star(cx, cy, r, fill):
+            pts = []
+            for i in range(10):
+                ang = -math.pi / 2 + i * math.pi / 5
+                rad = r if i % 2 == 0 else r * 0.42
+                pts.append((cx + rad * math.cos(ang), cy + rad * math.sin(ang)))
+            draw.polygon(pts, fill=fill)
 
         # ── Auto-fit headline: shrink font until the WHOLE headline fits ──
         # in at most 2 lines. Never truncate — a cut-off headline looks broken.
@@ -629,21 +657,33 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
                 lines.append(cur)
             return lines
 
-        def _fit_headline(text, start, min_size, max_lines=2):
+        def _fit_headline(text, start, min_size, max_lines=2, mk=None):
+            mk = mk or (lambda s: _font(s, idx=1))
             size = start
             while size >= min_size:
-                font = _font(size, idx=1)
+                font = mk(size)
                 lines = _wrap_to_width(text, font, avail_w)
                 fits_width = all(draw.textlength(ln, font=font) <= avail_w for ln in lines)
                 if len(lines) <= max_lines and fits_width:
                     return font, lines, size
                 size -= 3
-            font = _font(min_size, idx=1)
+            font = mk(min_size)
             return font, _wrap_to_width(text, font, avail_w)[:max_lines], min_size
 
-        hfont, hl_lines, fs_hl = _fit_headline(
-            headline.strip(), start=max(int(w * 0.098), 38), min_size=max(int(w * 0.052), 24)
-        )
+        # Headline treatment per layout: bold goes bigger (urgency shouts),
+        # editorial goes serif and slightly smaller (story whispers)
+        if layout == "bold":
+            hfont, hl_lines, fs_hl = _fit_headline(
+                headline.strip(), start=max(int(w * 0.115), 44),
+                min_size=max(int(w * 0.052), 24), max_lines=3)
+        elif layout == "editorial":
+            hfont, hl_lines, fs_hl = _fit_headline(
+                headline.strip(), start=max(int(w * 0.088), 34),
+                min_size=max(int(w * 0.048), 22), mk=_serif)
+        else:
+            hfont, hl_lines, fs_hl = _fit_headline(
+                headline.strip(), start=max(int(w * 0.098), 38),
+                min_size=max(int(w * 0.052), 24))
         efont = _font(fs_eye, idx=1)   # Bold (eyebrow)
         sfont = _font(fs_sub, idx=0)   # Regular (hook)
         bfont = _font(fs_btn, idx=1)   # Bold (CTA)
@@ -667,6 +707,26 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
         content_w = label_w + arrow_gap + arrow_len
         btn_w_px  = max(content_w + 2 * btn_pad_x, int(w * 0.42))
 
+        # ── Real numbers for the social-proof star row ─────────────────
+        import re as _re
+        rating_txt = ""
+        if signals:
+            m = _re.search(r"\d\.\d", str(signals.get("rating", "")))
+            r_num = m.group(0) if m else ""
+            m2 = _re.search(r"[\d,]+\+?", str(signals.get("review_count", "")))
+            c_num = m2.group(0) if m2 else ""
+            if r_num and c_num:
+                rating_txt = f"{r_num}  ·  {c_num} reviews"
+            elif r_num:
+                rating_txt = f"Rated {r_num} by customers"
+            elif c_num:
+                rating_txt = f"{c_num} customer reviews"
+        use_stars = layout == "social_proof" and bool(rating_txt)
+        centered = layout == "editorial"
+
+        def _line_x(line, font):
+            return (w - int(draw.textlength(line, font=font))) // 2 if centered else pad
+
         # ── Build layout from bottom up ────────────────────────────────
         bot_margin = int(h * 0.062)
         gap        = int(h * 0.024)
@@ -674,38 +734,85 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
         btn_y   = h - bot_margin - btn_h_px
         hook_y  = btn_y - gap - len(hook_lines) * lh_sub
         hl_y    = hook_y - int(h * 0.024) - len(hl_lines) * lh_hl
-        line_y  = hl_y - int(h * 0.026)
-        eye_y   = line_y - int(h * 0.014) - fs_eye
 
-        # Eyebrow (uppercase, tracked, bright brand color)
-        if eyebrow:
-            _draw_tracked((pad, eye_y), eyebrow.upper()[:32], efont,
-                          (*accent_bright, 255), tracking=max(2, int(fs_eye * 0.14)))
+        # ── Element above the headline: differs per layout ─────────────
+        star_r = int(fs_eye * 0.62)
+        if use_stars:
+            row_h = star_r * 2
+            row_y = hl_y - int(h * 0.028) - row_h
+            cx = pad + star_r
+            cy = row_y + star_r
+            for _ in range(5):
+                _star(cx, cy, star_r, (255, 196, 54, 255))
+                cx += int(star_r * 2.35)
+            rt_bbox = draw.textbbox((0, 0), rating_txt, font=efont)
+            draw.text((cx + int(star_r * 0.5), cy - (rt_bbox[3] - rt_bbox[1]) // 2 - rt_bbox[1]),
+                      rating_txt, font=efont, fill=(255, 255, 255, 245))
+        elif layout == "bold" and eyebrow:
+            # Badge chip: eyebrow inside a solid brand-color tag
+            chip_txt = eyebrow.upper()[:28]
+            tr = max(2, int(fs_eye * 0.10))
+            chip_w = int(draw.textlength(chip_txt, font=efont) + len(chip_txt) * tr) + int(fs_eye * 1.6)
+            chip_h = int(fs_eye * 2.0)
+            chip_y = hl_y - int(h * 0.026) - chip_h
+            draw.rounded_rectangle([pad, chip_y, pad + chip_w, chip_y + chip_h],
+                                   radius=int(chip_h * 0.24), fill=(*c["btn"], 255))
+            _draw_tracked((pad + int(fs_eye * 0.8), chip_y + (chip_h - fs_eye) // 2 - int(fs_eye * 0.10)),
+                          chip_txt, efont, (*c["btn_txt"], 255), tracking=tr)
+        else:
+            # Classic / editorial: tracked eyebrow + accent rule (centered if editorial)
+            line_y = hl_y - int(h * 0.026)
+            eye_y  = line_y - int(h * 0.014) - fs_eye
+            rule_w = int(w * 0.13)
+            rule_x = (w - rule_w) // 2 if centered else pad
+            if eyebrow:
+                etxt = eyebrow.upper()[:32]
+                tr = max(2, int(fs_eye * 0.14))
+                etxt_w = int(draw.textlength(etxt, font=efont) + len(etxt) * tr)
+                ex = (w - etxt_w) // 2 if centered else pad
+                _draw_tracked((ex, eye_y), etxt, efont, (*accent_bright, 255), tracking=tr)
+            draw.rectangle([rule_x, line_y, rule_x + rule_w, line_y + max(4, int(h * 0.004))],
+                           fill=(*accent_bright, 255))
 
-        # Accent line
-        draw.rectangle([pad, line_y, pad + int(w * 0.13), line_y + max(4, int(h * 0.004))],
-                       fill=(*accent_bright, 255))
-
-        # Headline (white + soft shadow for contrast on any photo)
+        # ── Headline ───────────────────────────────────────────────────
+        # Bold layout: brand-color marker box behind the longest word
+        hi_word = ""
+        if layout == "bold":
+            words = [wd for wd in headline.strip().split() if len(_re.sub(r"\W", "", wd)) > 3]
+            hi_word = max(words, key=len) if words else ""
         y = hl_y
         for line in hl_lines:
-            draw.text((pad + 2, y + 2), line, font=hfont, fill=(0, 0, 0, 150))
-            draw.text((pad, y),     line, font=hfont, fill=(255, 255, 255, 255))
+            lx = _line_x(line, hfont)
+            if hi_word and hi_word in line.split():
+                pre = line[:line.index(hi_word)]
+                x0 = lx + int(draw.textlength(pre, font=hfont))
+                ww_px = int(draw.textlength(hi_word, font=hfont))
+                px_pad = int(fs_hl * 0.14)
+                draw.rounded_rectangle(
+                    [x0 - px_pad, y + int(fs_hl * 0.02), x0 + ww_px + px_pad, y + int(fs_hl * 1.16)],
+                    radius=int(fs_hl * 0.10), fill=(*c["btn"], 255))
+            draw.text((lx + 2, y + 2), line, font=hfont, fill=(0, 0, 0, 150))
+            draw.text((lx, y),     line, font=hfont, fill=(255, 255, 255, 255))
             y += lh_hl
 
-        # Hook text
+        # ── Hook text ──────────────────────────────────────────────────
         y = hook_y
         for line in hook_lines:
-            draw.text((pad, y), line, font=sfont, fill=(224, 224, 224, 235))
+            draw.text((_line_x(line, sfont), y), line, font=sfont, fill=(224, 224, 224, 235))
             y += lh_sub
 
-        # CTA pill
-        draw.rounded_rectangle(
-            [pad, btn_y, pad + btn_w_px, btn_y + btn_h_px],
-            radius=int(btn_h_px / 2), fill=(*c["btn"], 255)
-        )
-        btn_txt_col = (*c["btn_txt"], 255)
-        content_x = pad + (btn_w_px - content_w) // 2
+        # ── CTA pill: filled (classic/social/bold) or outlined + centered (editorial)
+        btn_x = (w - btn_w_px) // 2 if centered else pad
+        if centered:
+            ow = max(3, int(h * 0.0035))
+            draw.rounded_rectangle([btn_x, btn_y, btn_x + btn_w_px, btn_y + btn_h_px],
+                                   radius=int(btn_h_px / 2), outline=(255, 255, 255, 255), width=ow)
+            btn_txt_col = (255, 255, 255, 255)
+        else:
+            draw.rounded_rectangle([btn_x, btn_y, btn_x + btn_w_px, btn_y + btn_h_px],
+                                   radius=int(btn_h_px / 2), fill=(*c["btn"], 255))
+            btn_txt_col = (*c["btn_txt"], 255)
+        content_x = btn_x + (btn_w_px - content_w) // 2
         # Label (vertically centered)
         lbbox = draw.textbbox((0, 0), cta_label, font=bfont)
         ty = btn_y + (btn_h_px - (lbbox[3] - lbbox[1])) // 2 - lbbox[1]
@@ -722,7 +829,7 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
         )
 
         img.convert("RGB").save(image_path, "JPEG", quality=93)
-        print(f"  ✏️  Ad creative applied ({industry})")
+        print(f"  ✏️  Ad creative applied ({industry}, {layout})")
 
     except Exception as e:
         print(f"  ⚠️  Ad creative skipped: {e}")
@@ -839,7 +946,17 @@ def _edit_scraped_image(source_url, image_path, platform, config):
     _upscale_inplace(image_path)
 
 
-def generate_variant_images(data, output_dir, config, industry="general_business", scraped_images=None):
+VARIANT_LAYOUTS = {
+    # variant strategy → visual archetype, so the three ads read as three
+    # different creatives instead of one template with swapped text
+    0: "social_proof",  # variant_1: star row + real review numbers
+    1: "bold",          # variant_2: oversized urgency headline + marker highlight
+    2: "editorial",     # variant_3: centered serif story composition
+}
+
+
+def generate_variant_images(data, output_dir, config, industry="general_business",
+                            scraped_images=None, brand_signals=None):
     """Generate a real, finished ad image for EVERY variant of every platform — in
     parallel — so the reviewer can pick based on the actual creative, not a mockup.
     When the client's website has real photos, each variant remixes a DIFFERENT site
@@ -883,9 +1000,11 @@ def generate_variant_images(data, output_dir, config, industry="general_business
             headline = vdata.get("headline", "")
             hook = vdata.get("hook", "") or vdata.get("overlay", "")
             cta = vdata.get("cta", "Learn More")
-            _create_ad_creative(image_path, headline, hook, cta, industry, eyebrow)
+            layout = VARIANT_LAYOUTS.get(vnum, "classic")
+            _create_ad_creative(image_path, headline, hook, cta, industry, eyebrow,
+                                layout=layout, signals=brand_signals)
             vdata["image_path"] = image_path
-            return f"  ✅ {platform}/{vkey} ({made_from}): {image_path}"
+            return f"  ✅ {platform}/{vkey} ({made_from}, {layout}): {image_path}"
         except Exception as e:
             return f"  ⚠️  {platform}/{vkey} failed: {e}"
 
