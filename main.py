@@ -89,6 +89,11 @@ INDUSTRY_KEYWORDS = {
     "retail": [
         "boutique", "shop", "store", "retail", "clothing", "apparel", "jewelry",
         "gifts", "accessories", "collection", "collections", "merchandise",
+        # e-commerce / consumer-tech gear
+        "charger", "chargers", "charging", "cable", "cables", "adapter", "adapters",
+        "powerbank", "power bank", "wireless", "usb", "gadget", "gadgets", "device",
+        "devices", "electronics", "portable", "watt", "watts", "product", "products",
+        "cart", "checkout", "shipping", "bundle", "warranty", "add to cart", "buy now",
     ],
 }
 
@@ -608,49 +613,55 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
         # Starts lower + ramps gentler than before so more of the photo shows.
         overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         ov_draw = ImageDraw.Draw(overlay)
-        grad_start = int(h * 0.34)
+        grad_start = int(h * 0.30)
         for y in range(grad_start, h):
             t = (y - grad_start) / (h - grad_start)
-            alpha = int(230 * min(t ** 0.62, 1.0))
+            # Ramp to near-opaque so headline + body always read cleanly, but keep
+            # the top of the ramp gentle so the product photo stays visible.
+            alpha = int(248 * min(t ** 0.55, 1.0))
             fill_rgb = tuple(int(dark_brand[i] * t) for i in range(3))
             ov_draw.line([(0, y), (w, y)], fill=(*fill_rgb, alpha))
         img = Image.alpha_composite(img, overlay)
         draw = ImageDraw.Draw(img)
 
         # ── Fonts ──────────────────────────────────────────────────────
-        fs_eye = max(int(w * 0.030), 14)
-        fs_sub = max(int(w * 0.042), 17)
-        fs_btn = max(int(w * 0.041), 16)
+        fs_eye = max(int(w * 0.028), 14)
+        fs_sub = max(int(w * 0.041), 17)
+        fs_btn = max(int(w * 0.040), 16)
 
-        def _font(size, idx=1):
-            for path, i in [
-                ("/System/Library/Fonts/Helvetica.ttc", idx),
-                ("/System/Library/Fonts/Helvetica.ttc", 0),
-                ("/Library/Fonts/Arial Bold.ttf", None),
-                ("/System/Library/Fonts/Arial.ttf", None),
-            ]:
+        # Named type roles → prioritized (path, collection-index) stacks. Avenir Next
+        # (Heavy display, Demi labels, Medium body) and Didot (editorial serif) give a
+        # premium agency look; Helvetica Neue / Helvetica are graceful fallbacks.
+        FONT_STACKS = {
+            "display": [("/System/Library/Fonts/Avenir Next.ttc", 8),      # Heavy
+                        ("/System/Library/Fonts/HelveticaNeue.ttc", 1),
+                        ("/System/Library/Fonts/Helvetica.ttc", 1)],
+            "serif":   [("/System/Library/Fonts/Supplemental/Didot.ttc", 2),  # Bold
+                        ("/System/Library/Fonts/Supplemental/Georgia Bold.ttf", None),
+                        ("/System/Library/Fonts/Helvetica.ttc", 1)],
+            "label":   [("/System/Library/Fonts/Avenir Next.ttc", 2),      # Demi Bold
+                        ("/System/Library/Fonts/HelveticaNeue.ttc", 10),
+                        ("/System/Library/Fonts/Helvetica.ttc", 1)],
+            "body":    [("/System/Library/Fonts/Avenir Next.ttc", 5),      # Medium
+                        ("/System/Library/Fonts/HelveticaNeue.ttc", 0),
+                        ("/System/Library/Fonts/Helvetica.ttc", 0)],
+            "cta":     [("/System/Library/Fonts/Avenir Next.ttc", 0),      # Bold
+                        ("/System/Library/Fonts/HelveticaNeue.ttc", 1),
+                        ("/System/Library/Fonts/Helvetica.ttc", 1)],
+        }
+
+        def _tf(role, size):
+            for path, idx in FONT_STACKS.get(role, FONT_STACKS["body"]):
                 if os.path.exists(path):
                     try:
-                        return ImageFont.truetype(path, size=size, index=i) if i is not None \
-                               else ImageFont.truetype(path, size=size)
+                        return ImageFont.truetype(path, size, index=idx) if idx is not None \
+                               else ImageFont.truetype(path, size)
                     except Exception:
                         continue
             return ImageFont.load_default()
 
-        pad = int(w * 0.07)
+        pad = int(w * 0.075)
         avail_w = w - 2 * pad
-
-        # Serif for the editorial layout (Georgia reads "crafted", not "generated")
-        def _serif(size):
-            for p in ["/System/Library/Fonts/Supplemental/Georgia Bold.ttf",
-                      "/System/Library/Fonts/Supplemental/Georgia.ttf",
-                      "/System/Library/Fonts/Supplemental/Times New Roman Bold.ttf"]:
-                if os.path.exists(p):
-                    try:
-                        return ImageFont.truetype(p, size=size)
-                    except Exception:
-                        continue
-            return _font(size, idx=1)
 
         # Draw text with manual letter-spacing (PIL has no native tracking)
         def _draw_tracked(pos, text, font, fill, tracking):
@@ -684,7 +695,7 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
             return lines
 
         def _fit_headline(text, start, min_size, max_lines=2, mk=None):
-            mk = mk or (lambda s: _font(s, idx=1))
+            mk = mk or (lambda s: _tf("display", s))
             size = start
             while size >= min_size:
                 font = mk(size)
@@ -705,14 +716,14 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
         elif layout == "editorial":
             hfont, hl_lines, fs_hl = _fit_headline(
                 headline.strip(), start=max(int(w * 0.088), 34),
-                min_size=max(int(w * 0.048), 22), mk=_serif)
+                min_size=max(int(w * 0.048), 22), mk=lambda s: _tf("serif", s))
         else:
             hfont, hl_lines, fs_hl = _fit_headline(
                 headline.strip(), start=max(int(w * 0.098), 38),
                 min_size=max(int(w * 0.052), 24))
-        efont = _font(fs_eye, idx=1)   # Bold (eyebrow)
-        sfont = _font(fs_sub, idx=0)   # Regular (hook)
-        bfont = _font(fs_btn, idx=1)   # Bold (CTA)
+        efont = _tf("label", fs_eye)   # Demi Bold (eyebrow / rating)
+        sfont = _tf("body", fs_sub)    # Medium (hook)
+        bfont = _tf("cta", fs_btn)     # Bold (CTA)
 
         # ── Wrap hook (secondary — may truncate, but always with an ellipsis) ──
         hook_lines = _wrap_to_width(hook.strip(), sfont, avail_w)
@@ -720,8 +731,8 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
             hook_lines = hook_lines[:2]
             hook_lines[1] = hook_lines[1].rstrip(" ,;—-") + "…"
 
-        lh_hl  = int(fs_hl  * 1.18)
-        lh_sub = int(fs_sub * 1.42)
+        lh_hl  = int(fs_hl  * 1.14)
+        lh_sub = int(fs_sub * 1.46)
 
         # ── CTA pill: sized to label + vector arrow, not a full-width bar ──
         cta_label = cta[:20]
@@ -758,21 +769,21 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
         gap        = int(h * 0.024)
 
         btn_y   = h - bot_margin - btn_h_px
-        hook_y  = btn_y - gap - len(hook_lines) * lh_sub
-        hl_y    = hook_y - int(h * 0.024) - len(hl_lines) * lh_hl
+        hook_y  = btn_y - int(h * 0.030) - len(hook_lines) * lh_sub
+        hl_y    = hook_y - int(h * 0.030) - len(hl_lines) * lh_hl
 
         # ── Element above the headline: differs per layout ─────────────
-        star_r = int(fs_eye * 0.62)
+        star_r = int(fs_eye * 0.64)
         if use_stars:
             row_h = star_r * 2
-            row_y = hl_y - int(h * 0.028) - row_h
+            row_y = hl_y - int(h * 0.040) - row_h
             cx = pad + star_r
             cy = row_y + star_r
             for _ in range(5):
                 _star(cx, cy, star_r, (255, 196, 54, 255))
-                cx += int(star_r * 2.35)
+                cx += int(star_r * 2.4)
             rt_bbox = draw.textbbox((0, 0), rating_txt, font=efont)
-            draw.text((cx + int(star_r * 0.5), cy - (rt_bbox[3] - rt_bbox[1]) // 2 - rt_bbox[1]),
+            draw.text((cx + int(star_r * 0.9), cy - (rt_bbox[3] - rt_bbox[1]) // 2 - rt_bbox[1]),
                       rating_txt, font=efont, fill=(255, 255, 255, 245))
         elif layout == "bold" and eyebrow:
             # Badge chip: eyebrow inside a solid brand-color tag
@@ -801,23 +812,30 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
                            fill=(*accent_bright, 255))
 
         # ── Headline ───────────────────────────────────────────────────
-        # Bold layout: brand-color marker box behind the longest word
-        hi_word = ""
-        if layout == "bold":
-            words = [wd for wd in headline.strip().split() if len(_re.sub(r"\W", "", wd)) > 3]
-            hi_word = max(words, key=len) if words else ""
+        # Bold layout: brand-color marker box behind the PUNCHLINE — the trailing
+        # word(s) of the last line, where the emotional payoff lands. Anchoring it
+        # to the end (not a random middle word) reads as a deliberate design choice.
+        hi_phrase = ""
+        if layout == "bold" and hl_lines:
+            last_words = hl_lines[-1].split()
+            if last_words:
+                hi_phrase = last_words[-1]
+                # pull in the previous word if the last one is tiny ("It", "Now")
+                if len(_re.sub(r"\W", "", hi_phrase)) <= 3 and len(last_words) > 1:
+                    hi_phrase = " ".join(last_words[-2:])
         y = hl_y
-        for line in hl_lines:
+        for idx, line in enumerate(hl_lines):
             lx = _line_x(line, hfont)
-            if hi_word and hi_word in line.split():
-                pre = line[:line.index(hi_word)]
+            is_last = idx == len(hl_lines) - 1
+            if hi_phrase and is_last and line.endswith(hi_phrase):
+                pre = line[:len(line) - len(hi_phrase)]
                 x0 = lx + int(draw.textlength(pre, font=hfont))
-                ww_px = int(draw.textlength(hi_word, font=hfont))
-                px_pad = int(fs_hl * 0.14)
+                ww_px = int(draw.textlength(hi_phrase, font=hfont))
+                px_pad = int(fs_hl * 0.16)
                 draw.rounded_rectangle(
-                    [x0 - px_pad, y + int(fs_hl * 0.02), x0 + ww_px + px_pad, y + int(fs_hl * 1.16)],
-                    radius=int(fs_hl * 0.10), fill=(*c["btn"], 255))
-            draw.text((lx + 2, y + 2), line, font=hfont, fill=(0, 0, 0, 150))
+                    [x0 - px_pad, y + int(fs_hl * 0.04), x0 + ww_px + px_pad, y + int(fs_hl * 1.14)],
+                    radius=int(fs_hl * 0.12), fill=(*c["btn"], 255))
+            draw.text((lx + 2, y + 2), line, font=hfont, fill=(0, 0, 0, 140))
             draw.text((lx, y),     line, font=hfont, fill=(255, 255, 255, 255))
             y += lh_hl
 
