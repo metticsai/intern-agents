@@ -416,6 +416,27 @@ HOMEPAGE CONTENT:
     else:
         raise ValueError(f"Unknown AI provider: {provider}")
 
+def _repair_json(text):
+    """Best-effort cleanup of the small JSON mistakes LLMs make, so one stray
+    character doesn't waste a whole generation. Handles: markdown fences, trailing
+    commas before } or ], smart quotes, and stray control chars inside the object."""
+    import re
+    # Strip code fences if the model wrapped the object despite instructions
+    text = re.sub(r"^```(?:json)?", "", text.strip())
+    text = re.sub(r"```$", "", text.strip())
+    # Isolate the outermost object
+    start, end = text.find("{"), text.rfind("}") + 1
+    if start != -1 and end > 0:
+        text = text[start:end]
+    # Normalize smart quotes the model may have used around keys/values
+    text = text.replace("“", '"').replace("”", '"')
+    # Remove trailing commas: ,}  ,]  (the single most common LLM JSON error)
+    text = re.sub(r",(\s*[}\]])", r"\1", text)
+    # Drop raw control characters that break strict JSON
+    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", text)
+    return text
+
+
 def validate_output(campaign_json):
     print(f"\n✔️  Validating campaign output...")
     errors = []
@@ -426,7 +447,12 @@ def validate_output(campaign_json):
         if start == -1 or end == 0:
             raise json.JSONDecodeError("No JSON object found", campaign_json, 0)
         clean = campaign_json[start:end]
-        data = json.loads(clean)
+        try:
+            data = json.loads(clean)
+        except json.JSONDecodeError:
+            # Retry once after repairing common LLM JSON mistakes
+            data = json.loads(_repair_json(campaign_json))
+            print("  🔧 Recovered from minor JSON formatting error")
     except json.JSONDecodeError as e:
         msg = f"Not valid JSON: {e} (response length: {len(campaign_json)} chars, last 200: ...{campaign_json[-200:]})"
         print(f"❌ {msg}")

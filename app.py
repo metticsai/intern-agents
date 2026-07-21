@@ -87,19 +87,27 @@ async def generate(request: Request):
     config = json.load(open("config.json"))
 
     from main import generate_campaign, validate_output
-    try:
-        campaign_json = generate_campaign(
-            session["scraped"],
-            session["company_name"],
-            session["location"],
-            config,
-            feedback,
-        )
-    except Exception as e:
-        return JSONResponse({"error": f"Generation failed: {e}"}, status_code=500)
-
-    is_valid, campaign_data, val_error = validate_output(campaign_json)
-    if not is_valid:
+    # Generate + validate with one automatic retry: LLMs occasionally emit a stray
+    # malformed character, and a clean re-roll is invisible to the user and far
+    # better than an error screen mid-demo.
+    campaign_data, val_error = None, None
+    for attempt in range(2):
+        try:
+            campaign_json = generate_campaign(
+                session["scraped"],
+                session["company_name"],
+                session["location"],
+                config,
+                feedback,
+            )
+        except Exception as e:
+            val_error = f"Generation failed: {e}"
+            continue
+        is_valid, campaign_data, val_error = validate_output(campaign_json)
+        if is_valid:
+            break
+        print(f"  ↻ Regenerating after invalid output (attempt {attempt + 1})")
+    if campaign_data is None:
         return JSONResponse({"error": f"Validation failed: {val_error}"}, status_code=500)
 
     configured = config.get("platforms", ["meta"])
