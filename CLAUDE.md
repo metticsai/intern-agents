@@ -18,50 +18,64 @@ under 60 seconds.
 ---
 
 ## Current State (What Is Built And Working)
-- main.py runs a full 5 stage pipeline from company name to output files
-- Stage 1: DuckDuckGo search finds the business website automatically
-- Stage 2: BeautifulSoup scrapes H1, H2, paragraphs, and image URLs
-- Stage 3: Gemini 2.5 Flash generates platform specific ad copy
-- Stage 4: Python validates all required fields before saving
-- Stage 5: Pollinations.ai generates image URLs for each platform
-- Output: meta.md, tiktok.md, linkedin.md, campaign.json saved automatically
-- Config: config.json makes AI provider and image model swappable in one line
+- Web app (app.py, FastAPI) is the primary interface — `uvicorn app:app`
+- Stage 1: DuckDuckGo search finds the business website; user confirms URL in the browser
+- Stage 2: BeautifulSoup scrapes H1/H2/paragraphs + subpages, real product photos, and brand signals
+- Stage 3: STRANDS MULTI-AGENT pipeline generates the campaign (see below)
+- Stage 4: Python validates every field; json_repair recovers malformed LLM JSON
+- Stage 5: Fal.ai generates a real, designed ad image per variant (edit real product
+  photos for retail; generate on-brand hero images for other industries) + 4x upscale
+- Stage 6: meta.md + campaign.json saved automatically; images promoted on save
+- Config: config.json swaps AI provider, image model, and multi-agent on/off in one line
 - GitHub: All work on feat/creative-engine branch of metticsai/intern-agents
+
+### The live multi-agent pipeline (Strands SDK)
+A code-based supervisor (the web request handler) orchestrates four specialist agents;
+HITL gates live in the browser. If any agent fails it falls back to a single-call hybrid
+path so the app never breaks. Toggle with `ai_generation.use_agents`.
+- Brand Intelligence Agent (Claude Sonnet) → structured brand brief
+- Copy Generation Agent (Claude Sonnet) → 3 strategic variants (tuned image-prompt rules)
+- Platform Spec Agent (Python) → character-limit + CTA validation
+- Compliance Agent (Claude Haiku) → real PASS/FLAG/REJECT per variant
+
+Verified end-to-end on three industries: retail (The Urban Geek — edited product photos),
+food_beverage (Sense of Thai — generated dishes, Book Now), home_services (Pioneer
+Plumbing — generated technician scenes, Get Quote/Call Now).
 
 ---
 
-## Architecture (Current — Hybrid Pipeline)
+## Architecture (Current — Multi-Agent Pipeline + Hybrid Fallback)
 
-Hardcoded Python handles all mechanical stages.
-AI is called once for creative generation only.
-This was a deliberate Mettics decision to reduce cost and increase reliability.
+Python handles all mechanical stages. A code-based supervisor orchestrates the Strands
+specialist agents for the creative work; if any agent fails, the system falls back to a
+single-call hybrid path. Deliberate Mettics tradeoff: richer architecture, without
+sacrificing reliability, cost control, or demo predictability.
 INPUT: Company Name + Location
 ↓
 STAGE 1 — SEARCH (Python/DuckDuckGo)
 
 Search for company name + location
 Return top 3 results
-User selects which URL to use
+User confirms which URL to use (browser)
 ↓
-STAGE 2 — SCRAPE & VALIDATE (Python/BeautifulSoup)
-Fetch website HTML
-Extract H1, H2, paragraphs, image URLs
-Validate minimum content threshold
+STAGE 2 — SCRAPE (Python/BeautifulSoup)
+Fetch homepage + About/Services/Reviews subpages
+Extract H1/H2/paragraphs, real product photos, brand signals
+Detect industry from content + company name
 Fail gracefully if wrong page
 ↓
-STAGE 3 — AI GENERATION (Gemini/Anthropic — configurable)
-Send scraped data + system_prompt.txt to AI
-AI returns structured JSON
-Provider swappable via config.json
+STAGE 3 — MULTI-AGENT GENERATION (Strands SDK)
+Supervisor → Brand Intel (Sonnet) → Copy Gen (Sonnet)
+          → Platform Spec (Python) → Compliance (Haiku)
+Falls back to single-call hybrid generation on any failure
 ↓
 STAGE 4 — VALIDATE OUTPUT (Python)
-Strip markdown fences from AI response
-Validate all platforms and required fields exist
-Fail with clear error if missing
+json_repair recovers malformed LLM JSON (unescaped quotes, trailing commas)
+Validate all required fields exist; auto-retry once
 ↓
-STAGE 5 — IMAGE GENERATION (Pollinations.ai now / Fal.ai soon)
-Build image URL from each platform image_prompt
-Add image_url to campaign data
+STAGE 5 — IMAGE GENERATION (Fal.ai)
+Retail: edit real product photos (flux-pro/kontext); else generate (flux-pro/v1.1)
+Design overlay (Pillow) + 4x upscale (aura-sr); one finished image per variant
 ↓
 STAGE 6 — SAVE OUTPUT (Python)
 Save meta.md, tiktok.md, linkedin.md, campaign.json
@@ -172,41 +186,45 @@ zero-to-one-engine/
 ```json
 {
   "ai_generation": {
-    "provider": "gemini",
-    "model": "gemini-2.5-flash"
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6",
+    "use_agents": true
   },
   "image_generation": {
-    "provider": "pollinations",
-    "model": "flux",
-    "cost_per_image": 0.00,
+    "enabled": true,
+    "provider": "fal",
+    "model": "flux-pro/v1.1",
+    "cost_per_image": 0.025,
     "resolution": "1024x1024"
   },
-  "platforms": ["meta", "tiktok", "linkedin"],
+  "platforms": ["meta"],
   "output_format": ["markdown", "json"]
 }
 ```
 
-To swap AI provider change "provider" to "anthropic" and "model" to "claude-sonnet-4-6".
-To swap image provider change "provider" to "fal" and "model" to "flux-dev".
+- `ai_generation.provider` — "anthropic" (active) or "gemini"; swappable in one line.
+- `ai_generation.use_agents` — true runs the Strands multi-agent pipeline; false forces the hybrid single-call path.
+- `image_generation.enabled` — false skips image generation (text-only, faster/cheaper).
 No code changes needed — config.json controls everything.
 
 ---
 
 ## API Keys (.env)
-GEMINI_API_KEY=...     # Active — Gemini 2.5 Flash text generation
-ANTHROPIC_API_KEY=...  # Configured — needs credits to activate
-FAL_KEY=...            # Configured — needs activation for real images
+ANTHROPIC_API_KEY=...  # Active — Claude Sonnet (copy/brand) + Haiku (compliance)
+FAL_KEY=...            # Active — Fal.ai image generation, editing, upscaling
+GEMINI_API_KEY=...     # Optional — only if provider switched to gemini
 
 ---
 
 ## How To Run
 ```bash
 cd ~/Desktop/zero-to-one-engine
-python3 main.py
+python3 -m pip install -r requirements.txt   # first time only
+python3 -m uvicorn app:app --reload --port 8000
 ```
-Enter company name and location when prompted.
-Select which search result to use (1, 2, or 3).
-Agent handles everything else automatically.
+Open http://127.0.0.1:8000, enter a company name + location, confirm the URL, then
+review and export. (CLI path still exists: `python3 main.py` for the hybrid pipeline,
+`python3 run_agents.py` for the standalone multi-agent CLI.)
 
 ---
 
@@ -227,32 +245,31 @@ Meta, TikTok, and LinkedIn campaign in the output folder.
 ---
 
 ## What Is Working Right Now
-- Full end to end pipeline via python3 main.py
-- Gemini 2.5 Flash generating real ad copy
-- All three platforms generating correctly
-- JSON and Markdown output saving correctly
-- Pollinations.ai image URLs generating for each platform
-- Dynamic output folder from company name
-- Website selection from search results
-- Graceful error handling at every stage
+- Full end-to-end web app: `uvicorn app:app` → search → confirm URL → generate → review → export
+- Strands multi-agent pipeline (Brand Intel + Copy Gen on Sonnet, Compliance on Haiku)
+- Real compliance verdicts (PASS/FLAG/REJECT) rendered as badges on the review cards
+- Fal.ai real designed ad images per variant — flux-pro/kontext (edit real retail photos),
+  flux-pro/v1.1 (generate), aura-sr (4x upscale)
+- Three distinct designed layouts (social proof / bold / editorial) + premium type
+  (Avenir Next, Didot); emojis stripped from overlay text; no cut-off copy
+- Industry detection from scraped content AND company name (survives JS-rendered sites)
+- json_repair + auto-retry recover malformed LLM output; hybrid fallback if agents fail
+- Human-in-the-loop in the browser: URL confirmation + creative review; never auto-publishes
+- Graceful error handling at every stage; requirements.txt for one-command setup
 
 ---
 
 ## Current Blockers
-- Fal.ai key needs activating for real downloaded images
-- Anthropic API needs credits for Claude as text provider
-- Human review gate not yet built
-- Multi-agent architecture not yet implemented
-- Google and Amazon platforms not yet added
+- Google and Amazon platforms not yet added (Meta is the focused demo scope; TikTok/LinkedIn scaffolded)
+- Benign `Event loop is closed` log warning from the async SDK client (cosmetic, never reaches the browser)
+- PR not yet opened (branch is many commits ahead)
 
 ---
 
 ## Immediate Next Steps (This Week)
-1. Remove debug output (RAW GEMINI OUTPUT lines) from main.py
-2. Add human review gate — show campaign preview, ask approve/reject
-3. Activate Fal.ai for real image generation
-4. Test with second client to prove generalizability
-5. Commit clean version and open PR
+1. Open the PR (overdue per Mettics Friday policy)
+2. Optional: suppress the async-cleanup log warning
+3. Optional: expand active platforms beyond Meta (TikTok/LinkedIn already scaffolded)
 
 ---
 
@@ -290,9 +307,16 @@ Must be tested on at least 2-3 different business types before handoff.
 ---
 
 ## Key Decisions Made
-- Hybrid pipeline over pure agent: More reliable, cheaper, demo predictable
-- Gemini over Anthropic for now: Free tier available while credits pending
-- Pollinations.ai over Fal.ai for now: Free testing before real key activated
+- Multi-agent pipeline is the live system, with the hybrid single-call path as an
+  automatic fallback: get the richer architecture without risking reliability
+- Code-based supervisor (not an LLM supervisor): HITL gates live in the browser, so the
+  web handler orchestrates the agents — more reliable and easier to instrument
+- Anthropic (Claude) as the active provider: Sonnet for creative work, Haiku for compliance
+- Fal.ai for images: kontext to edit real retail product photos, v1.1 to generate,
+  aura-sr to upscale
+- Edit real photos only for product industries; generate on-brand hero images for
+  food/service/health (their site photos are storefronts/stock people/press logos)
+- Industry detection scores the company name too, so JS-rendered sites still classify
 - system_prompt.txt separate from PROMPTS.md: Reduces token consumption
 - config.json for all provider settings: One line swap, no code changes
 - .env permanently gitignored: Fixed malformed .gitignore (.env - → .env)
