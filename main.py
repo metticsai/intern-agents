@@ -455,9 +455,17 @@ def validate_output(campaign_json):
         try:
             data = json.loads(clean)
         except json.JSONDecodeError:
-            # Retry once after repairing common LLM JSON mistakes
-            data = json.loads(_repair_json(campaign_json))
-            print("  🔧 Recovered from minor JSON formatting error")
+            # Recover from malformed LLM JSON (unescaped quotes, trailing commas,
+            # missing commas, ...). json_repair is the robust path; the regex
+            # cleanup is a dependency-free fallback if it isn't installed.
+            try:
+                import json_repair
+                data = json_repair.loads(campaign_json)
+                if not isinstance(data, dict) or not data:
+                    raise ValueError("json_repair produced no object")
+            except ImportError:
+                data = json.loads(_repair_json(campaign_json))
+            print("  🔧 Recovered from malformed JSON in AI response")
     except json.JSONDecodeError as e:
         msg = f"Not valid JSON: {e} (response length: {len(campaign_json)} chars, last 200: ...{campaign_json[-200:]})"
         print(f"❌ {msg}")
@@ -766,7 +774,6 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
 
         # ── Build layout from bottom up ────────────────────────────────
         bot_margin = int(h * 0.062)
-        gap        = int(h * 0.024)
 
         btn_y   = h - bot_margin - btn_h_px
         hook_y  = btn_y - int(h * 0.030) - len(hook_lines) * lh_sub

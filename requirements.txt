@@ -1,0 +1,27 @@
+# Community Trust Creative Agent — Python dependencies
+# Install with:  python3 -m pip install -r requirements.txt
+
+# Web app
+fastapi==0.139.2
+uvicorn==0.51.0
+jinja2==3.1.6
+python-multipart==0.0.32
+
+# Scraping (search uses raw requests to DuckDuckGo HTML — no extra lib)
+requests==2.34.2
+beautifulsoup4==4.15.0
+
+# Creative pipeline
+pillow==12.3.0
+python-dotenv==1.2.2
+
+# AI providers
+anthropic==0.116.0
+google-generativeai==0.8.6
+fal-client==1.0.0
+
+# Robust recovery from malformed LLM JSON output
+json-repair==0.61.7
+
+# Multi-agent orchestration (Strands)
+strands-agents==1.46.0
