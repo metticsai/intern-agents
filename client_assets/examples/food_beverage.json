@@ -1,0 +1,22 @@
+{
+  "industry": "food_beverage",
+  "description": "Coffee shops, cafes, restaurants, bakeries, bars",
+  "examples": [
+    {
+      "angle": "SOCIAL PROOF — community + specific details",
+      "headline": "Brambleton's Living Room ☕",
+      "hook": "800+ five-star reviews. Daily happy hour 5–7pm. Open mic every first Friday. This is Blend. 💛",
+      "body": "Blend Coffee Bar at Southern Walk Plaza isn't a chain — it's the place your neighborhood has been waiting for. Trivia nights, live music, specialty drinks, and a staff that actually knows your name. Come see why Brambleton keeps showing up. 🎶",
+      "cta": "Learn More",
+      "hashtags": "#BlendCoffeeBar #BrambletonVA #AshburnCoffee #LoudounCounty #SupportLocal"
+    },
+    {
+      "angle": "PERSONALITY / STORY — human, local, specific",
+      "headline": "Not Your Average Coffee Stop",
+      "hook": "Plot twist: the best happy hour in Brambleton doesn't serve alcohol. ☕ 5–7pm daily.",
+      "body": "Blend Coffee Bar is Trivia Night with Jenifer and Ken, open mic on the patio, bingo on the third Friday, and a latte that fixes everything. Southern Walk Plaza, Brambleton. Your suburb finally has a place to actually be. 🙌",
+      "cta": "Book Now",
+      "hashtags": "#BlendCoffeeBar #BrambletonLife #LoudounLocal #CoffeeCommunity #ThirdPlace"
+    }
+  ]
+}

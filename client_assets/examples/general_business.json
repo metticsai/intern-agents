@@ -1,0 +1,24 @@
+{
+  "industry": "general_business",
+  "description": "Fallback for any local SMB that doesn't match a specific industry",
+  "examples": [
+    {
+      "angle": "SOCIAL PROOF — reviews + local credibility",
+      "headline": "Brambleton's #1 Rated Business",
+      "hook": "178 five-star reviews from your neighbors. Not Yelp paid — just people who keep coming back. ⭐",
+      "body": "Brambleton locals have been trusting us for 11 years — not because we're the cheapest, but because we actually show up, do the job right, and follow up. Family-owned and Loudoun-based. Schedule online in 60 seconds or call and talk to a real person. 📞",
+      "cta": "Contact Us",
+      "hashtags": "#BrambletonVA #LoudounCounty #SupportLocal #NorthernVirginia #LocalBusiness #SmallBusiness #LoudounVA",
+      "image_prompt": "Medium candid shot of a business owner in their element — working behind a counter or in their space — genuine smile toward a customer, warm natural light, real and lived-in business environment with character, shot on Sony A7R IV f/1.8, warm golden color grade, authentic not staged, 4:5 vertical crop, photorealistic"
+    },
+    {
+      "angle": "PAIN POINT — bad experience elsewhere, better option here",
+      "headline": "Finally, One That Shows Up",
+      "hook": "Tired of booking someone who ghosts you? We text you a confirmation, a reminder, and an ETA. Every time. 📲",
+      "body": "Loudoun families switched to us after one too many no-shows and unanswered calls. We built our whole operation around communication — because that's the part everyone else gets wrong. Read our reviews if you don't believe us. First-time customers get 10% off. 💯",
+      "cta": "Book Now",
+      "hashtags": "#LoudounCounty #BrambletonVA #NorthernVirginia #LocalService #ReliableService #SmallBusinessVA #SupportLocal",
+      "image_prompt": "Over-the-shoulder medium shot of a business owner on a phone call at their workspace, relaxed and confident, warm afternoon light through a window, clean and organized environment that signals professionalism, genuine expression of listening, shot on Sony A7R IV f/2.0, warm neutral color grade, 4:5 vertical crop, photorealistic"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "industry": "health_beauty",
+  "description": "Hair salons, spas, nail salons, barbers, massage, skincare",
+  "examples": [
+    {
+      "angle": "SOCIAL PROOF — results + trust",
+      "headline": "Ashburn's Favorite Salon",
+      "hook": "312 five-star reviews. Walk-ins welcome. Loudoun County's most trusted cuts since 2015. ✂️",
+      "body": "At Studio Luxe in Ashburn, you're not a number. Our stylists remember your cut, your color, and your coffee order. New client special: 20% off your first visit. 💇‍♀️",
+      "cta": "Book Now",
+      "hashtags": "#AshburnVA #LoudounSalon #HairSalon #StudioLuxe #SupportLocal"
+    },
+    {
+      "angle": "PAIN POINT — busy person, real solution",
+      "headline": "Great Hair, No Wait.",
+      "hook": "You don't have time to wait 45 minutes for a salon that forgets your name. We get it. 💆‍♀️",
+      "body": "Studio Luxe in Ashburn runs on your schedule — online booking, same-week availability, and stylists who actually listen. Walk in looking good, walk out feeling amazing. That's the deal. ✨",
+      "cta": "Sign Up",
+      "hashtags": "#AshburnSalon #LoudounCounty #NoWaitSalon #HairGoals #NorthernVirginiaStyle"
+    }
+  ]
+}

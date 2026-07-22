@@ -1,0 +1,24 @@
+{
+  "industry": "retail",
+  "description": "Boutique clothing, home goods, gifts, accessories, local shops",
+  "examples": [
+    {
+      "angle": "SOCIAL PROOF — local love + discovery",
+      "headline": "Broadlands' Hidden Gem",
+      "hook": "231 Loudoun women found their go-to boutique. This is where they shop now. 🛍️",
+      "body": "Reverie Boutique in Broadlands carries brands you won't find at the mall — curated by a local mom who was tired of driving to Tysons for something that actually fit. New arrivals every Tuesday. Free gift wrapping all year. Stop in and see what everyone keeps texting each other about. ✨",
+      "cta": "Shop Now",
+      "hashtags": "#BroadlandsVA #LoudounBoutique #ShopLocal #NorthernVirginiaShopping #LocalBoutique #LoudounMoms #SupportSmallBusiness",
+      "image_prompt": "Overhead flat lay on white marble surface showing a neatly folded linen blouse, a small gold necklace, a kraft paper shopping bag with twine handle, and a single dried flower sprig, bright diffused natural window light from upper left, clean editorial aesthetic, shot on Sony A7R IV f/2.2, warm neutral color grade, ultra-high detail, 4:5 vertical crop, photorealistic"
+    },
+    {
+      "angle": "PERSONALITY / STORY — founder story, anti-chain",
+      "headline": "Not Amazon. Not the Mall.",
+      "hook": "We carry 40 brands you've never heard of. That's the whole point. 🌿",
+      "body": "Gather & Co. in Leesburg opened because the founders wanted a store they actually wanted to shop at — local goods, small-batch makers, things with a story. Every item on the floor was chosen by hand. Nothing ships from a warehouse. Come browse — no pressure, ever. 🏡",
+      "cta": "Learn More",
+      "hashtags": "#LeesburgVA #LoudounCounty #ShopSmall #LocalGoods #BuyLocal #SmallBatchMakers #NorthernVirginia",
+      "image_prompt": "Medium lifestyle shot of a woman in her 30s browsing wooden shelves stocked with ceramic mugs, linen pouches, and handmade candles inside a warm boutique shop, golden afternoon light streaming through large storefront windows, relaxed and genuine expression, soft bokeh on background shelving, shot on Sony A7R IV f/1.8, warm amber and cream color grade, 4:5 vertical crop, photorealistic"
+    }
+  ]
+}

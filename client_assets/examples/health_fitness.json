@@ -1,0 +1,24 @@
+{
+  "industry": "health_fitness",
+  "description": "Gyms, yoga studios, personal training, CrossFit, pilates, martial arts",
+  "examples": [
+    {
+      "angle": "SOCIAL PROOF — transformation + community",
+      "headline": "Ashburn's Fastest-Growing Gym",
+      "hook": "47 Ashburn residents hit a PR this month. You could've been one of them. 💪",
+      "body": "CrossFit Loudoun isn't a gym you go to — it's a community you belong to. Coaches who remember your name. Members who cheer when you finish last. 3 locations across Northern Virginia, zero contracts. Your first week is free. 🏋️",
+      "cta": "Sign Up",
+      "hashtags": "#AshburnFitness #LoudounCounty #CrossFitLoudoun #NorthernVirginia #LocalGym #FitnessCommunity #NoContracts",
+      "image_prompt": "Low-angle medium shot of a woman in athletic gear mid-clean-and-jerk lift inside a CrossFit box, dramatic side lighting casting strong shadows across the floor, chalk dust visible in the air, gritty industrial background with barbells and pull-up rigs, shot on Sony A7R IV f/1.8, desaturated color grade with warm highlights on skin, ultra-high detail, 4:5 vertical crop, photorealistic"
+    },
+    {
+      "angle": "PAIN POINT — busy person, real results",
+      "headline": "45 Minutes. Real Results.",
+      "hook": "You don't have 2 hours. Neither do we. Our 45-minute classes are built for people who actually have jobs. ⏱️",
+      "body": "F45 Brambleton designs every session around one rule: maximum output in minimum time. Science-backed circuits, coaches who push you, and a group that makes you show up even when you don't want to. New member? Walk in Monday. 🔥",
+      "cta": "Book Now",
+      "hashtags": "#F45Brambleton #HIIT #BrambletonVA #LoudounFitness #45MinuteWorkout #FunctionalFitness #NorthernVirginia",
+      "image_prompt": "Dynamic close-up of a man mid-sprint on a treadmill inside a sleek boutique fitness studio, dramatic overhead lighting with blue-white LEDs, motion blur on legs conveying speed, sweat visible on face showing real effort, dark high-contrast background, shot on Sony A7R IV f/2.0, cinematic color grade with deep blacks and bright highlights, 4:5 vertical crop, photorealistic"
+    }
+  ]
+}
