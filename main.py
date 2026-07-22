@@ -337,10 +337,12 @@ def validate_scrape(scraped_data, company_name, location):
     print(f"✅ Scrape validated — content looks good")
     return True
 
-def generate_campaign(scraped_data, company_name, location, config, feedback=""):
-    provider = config["ai_generation"]["provider"]
-    model = config["ai_generation"]["model"]
-    print(f"\n🤖 Sending to {provider} ({model}) for campaign generation...")
+def _build_campaign_prompt(scraped_data, company_name, location, config, feedback="", brand_brief=None):
+    """Assemble the rich generation prompt (tuned system prompt + scraped context +
+    per-industry few-shot examples + brand signals + optional Brand Brief + feedback).
+    Returns (system_prompt, user_message, industry). Shared by the hybrid single-call
+    path and the Copy Generation Agent so both produce identically high-quality copy
+    and image prompts."""
     signals = scraped_data.get("brand_signals", {})
     signals_text = "\n".join(f"  - {k}: {v}" for k, v in signals.items()) if signals else "  None extracted"
 
@@ -352,7 +354,6 @@ def generate_campaign(scraped_data, company_name, location, config, feedback="")
 
     industry, image_style = _detect_industry(scraped_data)
     platforms_to_generate = config.get("platforms", ["meta"])
-    print(f"  Industry detected: {industry} | Platforms: {', '.join(platforms_to_generate)}")
 
     examples_text = ""
     examples_path = f"client_assets/examples/{industry}.json"
@@ -372,6 +373,14 @@ def generate_campaign(scraped_data, company_name, location, config, feedback="")
                         examples_text += f"  image_prompt: {ex['image_prompt']}\n"
         except Exception:
             pass
+
+    # The Brand Intelligence Agent's structured brief, when available, gives the
+    # copywriter richer voice/USP/positioning signal than regex-scraped facts alone.
+    brief_block = ""
+    if brand_brief:
+        brief_block = ("\n\nBRAND BRIEF (from the Brand Intelligence Agent — use its voice, "
+                       "USPs, audience and positioning to make every line specific):\n"
+                       + json.dumps(brand_brief, indent=2))
 
     context = f"""
 Company: {company_name}
@@ -393,7 +402,23 @@ HOMEPAGE CONTENT:
 """
     system_prompt = open("system_prompt.txt").read()
     feedback_line = f"\n\nIMPORTANT FEEDBACK FROM REVIEWER — apply this to all 3 variants: {feedback}" if feedback else ""
-    full_prompt = f"{system_prompt}\n\nGenerate a complete campaign for {company_name} in {location}. Here is all the data scraped from their website:\n\n{context}{examples_text}{feedback_line}\n\nReturn ONLY a valid JSON object. No markdown, no explanation, just the JSON."
+    user_message = (f"Generate a complete campaign for {company_name} in {location}. "
+                    f"Here is all the data scraped from their website:\n\n"
+                    f"{context}{examples_text}{brief_block}{feedback_line}\n\n"
+                    f"Return ONLY a valid JSON object. No markdown, no explanation, just the JSON.")
+    return system_prompt, user_message, industry
+
+
+def generate_campaign(scraped_data, company_name, location, config, feedback="", brand_brief=None):
+    provider = config["ai_generation"]["provider"]
+    model = config["ai_generation"]["model"]
+    print(f"\n🤖 Sending to {provider} ({model}) for campaign generation...")
+
+    system_prompt, user_message, industry = _build_campaign_prompt(
+        scraped_data, company_name, location, config, feedback, brand_brief)
+    platforms_to_generate = config.get("platforms", ["meta"])
+    print(f"  Industry detected: {industry} | Platforms: {', '.join(platforms_to_generate)}")
+    full_prompt = f"{system_prompt}\n\n{user_message}"
 
     if provider == "gemini":
         from google import genai

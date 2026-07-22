@@ -87,28 +87,48 @@ async def generate(request: Request):
     config = json.load(open("config.json"))
 
     from main import generate_campaign, validate_output
-    # Generate + validate with one automatic retry: LLMs occasionally emit a stray
-    # malformed character, and a clean re-roll is invisible to the user and far
-    # better than an error screen mid-demo.
     campaign_data, val_error = None, None
-    for attempt in range(2):
+
+    # ── Primary path: the Strands multi-agent pipeline ─────────────────────────
+    # A code-based supervisor runs the four specialist agents (Brand Intel → Copy Gen
+    # → Platform Spec → Compliance). If anything in that chain fails, we fall back to
+    # the hybrid single-call path so the app never breaks mid-demo.
+    use_agents = config.get("ai_generation", {}).get("use_agents", True)
+    if use_agents:
         try:
-            campaign_json = generate_campaign(
+            from agents.web_pipeline import run_agent_pipeline
+            campaign_data, brand_brief = run_agent_pipeline(
                 session["scraped"],
                 session["company_name"],
                 session["location"],
                 config,
                 feedback,
             )
+            session["brand_brief"] = brand_brief
         except Exception as e:
-            val_error = f"Generation failed: {e}"
-            continue
-        is_valid, campaign_data, val_error = validate_output(campaign_json)
-        if is_valid:
-            break
-        print(f"  ↻ Regenerating after invalid output (attempt {attempt + 1})")
+            print(f"  ⚠️  Multi-agent pipeline failed ({e}) — falling back to hybrid path")
+            campaign_data = None
+
+    # ── Fallback path: hybrid single-call generation with one auto-retry ───────
     if campaign_data is None:
-        return JSONResponse({"error": f"Validation failed: {val_error}"}, status_code=500)
+        for attempt in range(2):
+            try:
+                campaign_json = generate_campaign(
+                    session["scraped"],
+                    session["company_name"],
+                    session["location"],
+                    config,
+                    feedback,
+                )
+            except Exception as e:
+                val_error = f"Generation failed: {e}"
+                continue
+            is_valid, campaign_data, val_error = validate_output(campaign_json)
+            if is_valid:
+                break
+            print(f"  ↻ Regenerating after invalid output (attempt {attempt + 1})")
+        if campaign_data is None:
+            return JSONResponse({"error": f"Validation failed: {val_error}"}, status_code=500)
 
     configured = config.get("platforms", ["meta"])
     campaign_data["platforms"] = {

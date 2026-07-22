@@ -68,6 +68,22 @@ def _build_structure(company_name: str, location: str, platforms: list) -> str:
     )
 
 
+def run_copy_gen_rich(system_prompt: str, user_message: str) -> str:
+    """Run the Copy Generation Agent as a Strands LLM agent using the fully-tuned
+    system prompt and context (image-prompt rules, few-shot examples, brand brief).
+
+    This is the web pipeline's copy step: a real Strands Agent (primary model tier),
+    but driven by the same rich prompt the hybrid path uses — so copy and image-prompt
+    quality are identical while the work runs through the multi-agent architecture.
+    Returns the raw model text; the caller repairs/parses it (json_repair)."""
+    agent = Agent(
+        model=get_model("primary"),
+        tools=[],
+        system_prompt=system_prompt,
+    )
+    return str(agent(user_message))
+
+
 def run_copy_gen_agent(brand_brief: dict, company_name: str, location: str, platforms: list) -> dict:
     """Run the Copy Generation Agent. Returns a campaign dict with 3 variants per platform."""
     agent = Agent(

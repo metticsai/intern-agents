@@ -115,7 +115,7 @@ async function selectUrl(url) {
     if (scrapeData.error) throw new Error(scrapeData.error);
 
     setStage("stage-scrape", "done", `Found ${scrapeData.paragraph_count} content blocks`);
-    setStage("stage-generate", "running", "Writing 3 ad variants...");
+    setStage("stage-generate", "running", "Brand Intel + Copy Gen agents...");
 
     document.getElementById("loading-title").textContent = "Building your ads...";
     document.getElementById("loading-sub").textContent = "Writing copy and rendering a real image for all 3 variants — about 60 seconds";
@@ -132,7 +132,7 @@ async function selectUrl(url) {
 
 async function runGenerate(feedback = "") {
   // One request now writes 3 variants AND renders a real ad image for each (~60s).
-  setStage("stage-generate", "running", "Writing 3 ad variants...");
+  setStage("stage-generate", "running", "Brand Intel + Copy Gen agents...");
 
   const imgTicks = [
     "Generating 3 ad images with Fal.ai...",
@@ -143,7 +143,7 @@ async function runGenerate(feedback = "") {
   // After a few seconds, move the visual focus from copy → image generation
   const toImage = setTimeout(() => {
     setStage("stage-generate", "done", "3 variants ready");
-    setStage("stage-validate", "done", "All specs passed");
+    setStage("stage-validate", "done", "Spec + Compliance agents ✓");
     setStage("stage-image", "running", imgTicks[0]);
   }, 5000);
   let ti = 0;
@@ -164,7 +164,7 @@ async function runGenerate(feedback = "") {
     clearTimeout(toImage);
     clearInterval(ticker);
     setStage("stage-generate", "done", "3 variants ready");
-    setStage("stage-validate", "done", "All specs passed");
+    setStage("stage-validate", "done", "Spec + Compliance agents ✓");
     setStage("stage-image", "done", "3 ad images ready");
     await new Promise(r => setTimeout(r, 300));
 
@@ -456,8 +456,8 @@ function startOver() {
 
   setStage("stage-search", "pending", "Searching DuckDuckGo");
   setStage("stage-scrape", "pending", "Scraping site + subpages");
-  setStage("stage-generate", "pending", "Claude Sonnet writing 3 variants");
-  setStage("stage-validate", "pending", "Spec + compliance check");
+  setStage("stage-generate", "pending", "Brand Intel + Copy Gen agents");
+  setStage("stage-validate", "pending", "Platform Spec + Compliance agents");
   setStage("stage-image", "pending", "Fal.ai + 4x upscale");
 
   showView("view-home");

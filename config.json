@@ -1,7 +1,8 @@
 {
   "ai_generation": {
     "provider": "anthropic",
-    "model": "claude-sonnet-4-6"
+    "model": "claude-sonnet-4-6",
+    "use_agents": true
   },
   "image_generation": {
     "enabled": true,
