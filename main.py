@@ -595,6 +595,34 @@ def human_review_gate(data):
     print("\n✅ All platforms selected — proceeding to image generation")
     return data
 
+import re as _re_emoji
+# Emoji / pictographic ranges. The AI puts emojis in copy (great for the caption, which
+# the browser renders), but the fonts used to draw text ONTO the ad image have no emoji
+# glyphs, so they'd show as □ tofu boxes. We strip them from baked-in overlay text only.
+_EMOJI_RE = _re_emoji.compile(
+    "["
+    "\U0001F000-\U0001FAFF"   # emoticons, symbols, transport, supplemental
+    "\U00002600-\U000027BF"   # misc symbols + dingbats
+    "\U0001F1E6-\U0001F1FF"   # regional indicators (flags)
+    "\U00002300-\U000023FF"   # misc technical (⌚⏳ etc.)
+    "\U00002B00-\U00002BFF"   # misc symbols and arrows
+    "\U0000FE00-\U0000FE0F"   # variation selectors
+    "\U0000200D"              # zero-width joiner
+    "\U000020E3"              # combining enclosing keycap
+    "]+"
+)
+
+
+def _strip_emoji(text):
+    """Remove emoji/pictographs and tidy the spacing they leave behind."""
+    if not text:
+        return text
+    text = _EMOJI_RE.sub("", text)
+    text = _re_emoji.sub(r"\s{2,}", " ", text)          # collapse double spaces
+    text = _re_emoji.sub(r"\s+([.,!?;:])", r"\1", text)  # no space before punctuation
+    return text.strip()
+
+
 INDUSTRY_PALETTE = {
     "food_beverage":         {"accent": (210, 120, 30),  "btn": (210, 120, 30),  "btn_txt": (255, 255, 255)},
     "home_services":         {"accent": (30, 80, 180),   "btn": (30, 80, 180),   "btn_txt": (255, 255, 255)},
@@ -616,6 +644,14 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
     try:
         from PIL import Image, ImageDraw, ImageFont, ImageEnhance
         import math
+
+        # Strip emojis from anything drawn onto the image — the overlay fonts have no
+        # emoji glyphs, so they'd render as □ boxes. (Emojis stay in the caption/body,
+        # which the browser renders fine.)
+        headline = _strip_emoji(headline)
+        hook = _strip_emoji(hook)
+        cta = _strip_emoji(cta) or "Learn More"
+        eyebrow = _strip_emoji(eyebrow)
 
         c = INDUSTRY_PALETTE.get(industry, INDUSTRY_PALETTE["general_business"])
         accent = c["accent"]
