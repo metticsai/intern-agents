@@ -57,7 +57,7 @@ async def scrape(request: Request):
 
     from main import scrape_website, _detect_industry
     scraped = scrape_website(url)
-    industry, image_style = _detect_industry(scraped)
+    industry, image_style = _detect_industry(scraped, sessions[session_id].get("company_name", ""))
 
     sessions[session_id].update({
         "scraped": scraped,

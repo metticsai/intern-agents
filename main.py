@@ -108,22 +108,29 @@ INDUSTRY_STYLE_HINTS = {
 }
 
 
-def _detect_industry(scraped_data):
-    """Classify business type from scraped content. Returns (industry_key, image_style_hint).
-    Scores every industry by whole-word keyword hits and picks the highest — a single
-    stray substring can no longer misclassify (e.g. a Thai restaurant as home services)."""
+def _detect_industry(scraped_data, company_name=""):
+    """Classify business type from scraped content + the company name. Returns
+    (industry_key, image_style_hint). Scores every industry by whole-word keyword hits
+    and picks the highest — a single stray substring can no longer misclassify (e.g. a
+    Thai restaurant as home services). The company name is scored with extra weight so a
+    site that scrapes to almost nothing (JavaScript-rendered) still classifies correctly
+    when the name is telling — e.g. "Pioneer Plumbing" → home_services."""
     import re
     all_text = " ".join(
         scraped_data.get("paragraphs", []) +
         scraped_data.get("h1", []) +
         scraped_data.get("h2", [])
     ).lower()
+    name_text = (company_name or "").lower()
 
     scores = {}
     for industry, keywords in INDUSTRY_KEYWORDS.items():
         score = 0
         for kw in keywords:
             score += len(re.findall(rf"\b{re.escape(kw)}\b", all_text))
+            # A keyword in the business name is a strong intent signal — weight it 3x.
+            if name_text:
+                score += 3 * len(re.findall(rf"\b{re.escape(kw)}\b", name_text))
         scores[industry] = score
 
     best = max(scores, key=scores.get)
@@ -352,7 +359,7 @@ def _build_campaign_prompt(scraped_data, company_name, location, config, feedbac
         if combined:
             subpages_text += f"\n[{page_name.upper()} PAGE]\n" + "\n".join(combined[:8]) + "\n"
 
-    industry, image_style = _detect_industry(scraped_data)
+    industry, image_style = _detect_industry(scraped_data, company_name)
     platforms_to_generate = config.get("platforms", ["meta"])
 
     examples_text = ""
@@ -1078,17 +1085,29 @@ VARIANT_LAYOUTS = {
     2: "editorial",     # variant_3: centered serif story composition
 }
 
+# Industries where the client's own site photos ARE the ad subject (clean product
+# shots), so Kontext-editing them wins. For food/service/health businesses the site
+# photos are a mixed bag — storefronts, stock people, press logos — and editing them
+# yields off-brand results (garbled mastheads, random faces). Those industries get a
+# clean, fully-controlled generated hero image from the tuned per-industry prompts.
+PHOTO_REMIX_INDUSTRIES = {"retail"}
+
 
 def generate_variant_images(data, output_dir, config, industry="general_business",
                             scraped_images=None, brand_signals=None):
     """Generate a real, finished ad image for EVERY variant of every platform — in
     parallel — so the reviewer can pick based on the actual creative, not a mockup.
-    When the client's website has real photos, each variant remixes a DIFFERENT site
-    photo via Kontext (actual product/venue in the ad); fresh generation is the
-    fallback. Each variant gets image_path = output/.../images/{platform}_{variant}.jpg."""
+    For product industries the client's real site photos are remixed via Kontext (actual
+    product in the ad); other industries generate a fresh, on-brand hero image. Each
+    variant gets image_path = output/.../images/{platform}_{variant}.jpg."""
     provider = config["image_generation"]["provider"]
     model = config["image_generation"]["model"]
     scraped_images = scraped_images or []
+    # Only remix real photos for product industries — see PHOTO_REMIX_INDUSTRIES.
+    if industry not in PHOTO_REMIX_INDUSTRIES:
+        if scraped_images:
+            print(f"  ℹ️  {industry}: generating fresh on-brand images instead of remixing site photos")
+        scraped_images = []
     if scraped_images:
         print(f"\n🎨 Remixing {len(scraped_images)} real site photos with Kontext (+ {provider} {model} fallback)...")
     else:
@@ -1590,7 +1609,7 @@ if __name__ == "__main__":
         break
 
     # Stage 6 — Image Generation
-    industry, _ = _detect_industry(scraped)
+    industry, _ = _detect_industry(scraped, company_name)
     if config["image_generation"].get("enabled", True):
         try:
             data = generate_images(data, output_dir, config, industry)
