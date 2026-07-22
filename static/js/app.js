@@ -253,7 +253,12 @@ function buildVariantCard(variantKey, variant, companyInfo) {
   };
   const accent = accentMap[industry] || "#6366F1";
 
-  const truncBody = body.length > 120 ? body.slice(0, 120) + "…" : body;
+  // Show the full copy on the review card so the consultant can read it all. Only a
+  // very long body (e.g. a 1300-char LinkedIn post) is trimmed — and always on a word
+  // boundary with a proper "… more", never mid-word.
+  const truncBody = body.length > 400
+    ? body.slice(0, 400).replace(/\s+\S*$/, "") + "… more"
+    : body;
   const shortHook = hook.length > 80  ? hook.slice(0, 80)  + "…" : hook;
 
   wrapper.innerHTML = `

@@ -755,14 +755,26 @@ def _create_ad_creative(image_path, headline, hook, cta="Learn More", industry="
                 headline.strip(), start=max(int(w * 0.098), 38),
                 min_size=max(int(w * 0.052), 24))
         efont = _tf("label", fs_eye)   # Demi Bold (eyebrow / rating)
-        sfont = _tf("body", fs_sub)    # Medium (hook)
         bfont = _tf("cta", fs_btn)     # Bold (CTA)
 
-        # ── Wrap hook (secondary — may truncate, but always with an ellipsis) ──
-        hook_lines = _wrap_to_width(hook.strip(), sfont, avail_w)
-        if len(hook_lines) > 2:
-            hook_lines = hook_lines[:2]
-            hook_lines[1] = hook_lines[1].rstrip(" ,;—-") + "…"
+        # ── Auto-fit hook: shrink slightly so the WHOLE hook fits in up to 3 lines. ──
+        # This keeps the primary text from being cut off; ellipsis is a last resort only
+        # if an unusually long hook still won't fit even at the smallest size.
+        def _fit_hook(text, start, min_size, max_lines=3):
+            size = start
+            while size >= min_size:
+                f = _tf("body", size)
+                lines = _wrap_to_width(text, f, avail_w)
+                if len(lines) <= max_lines:
+                    return f, lines, size
+                size -= 2
+            f = _tf("body", min_size)
+            lines = _wrap_to_width(text, f, avail_w)[:max_lines]
+            lines[-1] = lines[-1].rstrip(" ,;—-") + "…"
+            return f, lines, min_size
+
+        sfont, hook_lines, fs_sub = _fit_hook(
+            hook.strip(), fs_sub, max(int(fs_sub * 0.80), 14), max_lines=3)
 
         lh_hl  = int(fs_hl  * 1.14)
         lh_sub = int(fs_sub * 1.46)
